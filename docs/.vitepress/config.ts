@@ -69,6 +69,7 @@ export default withMermaid(
         { text: '应用', link: '/applications/' },
         { text: '深度剖析', link: '/deep-dives/' },
         { text: '练习', link: '/exercises/' },
+        { text: 'LC 速通', link: '/leetcode/' },
         { text: '术语表', link: '/glossary' },
         { text: '我的笔记', link: '/annotations' },
       ],
@@ -228,6 +229,66 @@ export default withMermaid(
               { text: 'RAG 与 Agent 填空', link: '/exercises/rag-agent-fill' },
               { text: 'RAG 系统实现挑战', link: '/exercises/rag-build' },
               { text: '多模态代码填空', link: '/exercises/multimodal-fill' },
+            ],
+          },
+        ],
+        '/leetcode/': [
+          {
+            text: 'LeetCode Hot100 速通',
+            items: [
+              { text: '🗺️ 关卡地图', link: '/leetcode/' },
+            ],
+          },
+          {
+            text: 'D1 · 哈希 / 双指针 / 滑窗',
+            collapsed: false,
+            items: [
+              { text: '哈希', link: '/leetcode/patterns/hashmap' },
+              { text: '双指针', link: '/leetcode/patterns/two-pointer' },
+              { text: '滑动窗口', link: '/leetcode/patterns/sliding-window' },
+            ],
+          },
+          {
+            text: 'D2 · 二分 / 单调栈 / 堆',
+            collapsed: true,
+            items: [
+              { text: '二分查找', link: '/leetcode/patterns/binary-search' },
+              { text: '单调栈', link: '/leetcode/patterns/monotonic-stack' },
+              { text: '堆', link: '/leetcode/patterns/heap' },
+            ],
+          },
+          {
+            text: 'D3 · 链表 / 树',
+            collapsed: true,
+            items: [
+              { text: '链表', link: '/leetcode/patterns/linked-list' },
+              { text: '树 DFS', link: '/leetcode/patterns/tree-dfs' },
+              { text: '树 BFS', link: '/leetcode/patterns/tree-bfs' },
+            ],
+          },
+          {
+            text: 'D4 · Trie / 回溯 / 图',
+            collapsed: true,
+            items: [
+              { text: 'Trie 前缀树', link: '/leetcode/patterns/trie' },
+              { text: '回溯', link: '/leetcode/patterns/backtracking' },
+              { text: '图搜索', link: '/leetcode/patterns/graph' },
+            ],
+          },
+          {
+            text: 'D5 · DP / 位运算',
+            collapsed: true,
+            items: [
+              { text: '一维 DP', link: '/leetcode/patterns/dp-1d' },
+              { text: '二维 DP', link: '/leetcode/patterns/dp-2d' },
+              { text: '位运算与前缀和', link: '/leetcode/patterns/bit-prefix' },
+            ],
+          },
+          {
+            text: '辅助',
+            items: [
+              { text: '🐍 Python 速查', link: '/leetcode/python-cheatsheet' },
+              { text: '📚 今日复习', link: '/leetcode/srs' },
             ],
           },
         ],
