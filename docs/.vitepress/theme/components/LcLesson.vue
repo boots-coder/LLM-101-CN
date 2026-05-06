@@ -46,6 +46,24 @@
       <strong>💡 思路：</strong>{{ problem.intuition }}
     </section>
 
+    <section class="lc-solution">
+      <div class="lc-solution-head">
+        <h4>✅ 完整解法</h4>
+        <span class="lc-complexity">时间 {{ problem.complexity.time }} · 空间 {{ problem.complexity.space }}</span>
+      </div>
+      <p class="lc-solution-hint">先把整段解法看懂，下面的选择题是对这段代码逐行的理解检验。</p>
+      <pre class="lc-code"><code><span
+        v-for="(line, idx) in solutionLines"
+        :key="idx"
+        class="lc-line"
+      ><span class="lc-line-no">{{ String(idx + 1).padStart(2, ' ') }}</span><span class="lc-line-text" v-html="highlightPythonLine(line) || '&nbsp;'"></span></span></code></pre>
+    </section>
+
+    <div class="lc-questions-head">
+      <h4>🧠 理解检验</h4>
+      <span class="lc-questions-sub">每题都对应解法的某一行或某个决策</span>
+    </div>
+
     <div class="lc-questions">
       <MicroChoice
         v-for="(q, idx) in visibleQuestions"
@@ -66,11 +84,6 @@
     <section v-if="finished" class="lc-finish">
       <h3>🎉 关卡完成！</h3>
       <p>正确率 {{ Math.round(accuracy * 100) }}% · 获得 {{ xpThisLesson }} XP</p>
-      <details class="lc-full-code">
-        <summary>看完整解法</summary>
-        <pre><code>{{ problem.solutionCode }}</code></pre>
-        <p class="complexity">时间 {{ problem.complexity.time }} · 空间 {{ problem.complexity.space }}</p>
-      </details>
       <button class="lc-restart" @click="restart">再练一次（不计 XP）</button>
     </section>
 
@@ -85,6 +98,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { problems } from '../../../leetcode/_data/problems/index'
+import { highlightPythonLine } from '../utils/highlight-python'
 import {
   loadState, saveState, refillHearts, loseHeart,
   addXp, bumpStreak, recordAnswer, markProblemCompleted
@@ -98,6 +112,7 @@ const props = defineProps<{
 const problem = computed(() => problems[props.problemId])
 const total = computed(() => problem.value?.microQuestions.length ?? 0)
 const visibleQuestions = computed(() => problem.value?.microQuestions ?? [])
+const solutionLines = computed(() => (problem.value?.solutionCode ?? '').split('\n'))
 
 const state = ref(loadState())
 const hearts = computed(() => state.value.hearts)
@@ -324,19 +339,78 @@ function toggleInfinite() {
   text-align: center;
 }
 .lc-finish h3 { margin-top: 0; }
-.lc-full-code {
-  text-align: left;
-  margin: 16px 0;
+
+.lc-solution {
+  margin: 18px 0 22px;
+  padding: 16px 18px;
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-divider);
+  border-left: 4px solid #22c55e;
+  border-radius: 10px;
 }
-.lc-full-code summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
-.lc-full-code pre {
+.lc-solution-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.lc-solution-head h4 { margin: 0; font-size: 15px; }
+.lc-complexity {
+  font-size: 12px;
+  color: var(--vp-c-text-2);
   background: var(--vp-c-bg-mute);
-  padding: 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  overflow-x: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 600;
 }
-.complexity { font-size: 13px; color: var(--vp-c-text-2); }
+.lc-solution-hint {
+  font-size: 12.5px;
+  color: var(--vp-c-text-2);
+  margin: 4px 0 10px;
+}
+.lc-code {
+  background: #1e1e2e;
+  color: #e4e4e8;
+  border-radius: 8px;
+  padding: 14px 14px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  margin: 0;
+  overflow-x: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+}
+.lc-code code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+.lc-line { display: flex; gap: 12px; align-items: flex-start; padding: 0 4px; white-space: pre; }
+.lc-line-no {
+  flex-shrink: 0;
+  width: 22px;
+  text-align: right;
+  color: #6a6a7c;
+  user-select: none;
+  font-size: 11.5px;
+  padding-top: 1px;
+}
+.lc-line-text { flex: 1; }
+.lc-code :deep(.hl-kw)  { color: #c678dd; font-weight: 600; }
+.lc-code :deep(.hl-bi)  { color: #61afef; }
+.lc-code :deep(.hl-str) { color: #98c379; }
+.lc-code :deep(.hl-num) { color: #d19a66; }
+.lc-code :deep(.hl-com) { color: #7d8590; font-style: italic; }
+.lc-code :deep(.hl-op)  { color: #56b6c2; }
+
+.lc-questions-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 6px;
+}
+.lc-questions-head h4 { margin: 0; font-size: 15px; }
+.lc-questions-sub { font-size: 12px; color: var(--vp-c-text-2); }
+
 .lc-restart {
   background: var(--vp-c-brand-1);
   color: white;

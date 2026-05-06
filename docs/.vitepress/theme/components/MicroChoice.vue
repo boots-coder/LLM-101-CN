@@ -7,7 +7,7 @@
       :key="idx"
       class="mc-line"
       :class="{ highlight: idx + 1 === highlightLine }"
-    >{{ line }}<br/></span></code></pre>
+    ><span class="mc-line-no">{{ String(idx + 1).padStart(2, ' ') }}</span><span class="mc-line-text" v-html="highlightPythonLine(line) || '&nbsp;'"></span></span></code></pre>
 
     <div class="mc-options">
       <button
@@ -45,6 +45,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { highlightPythonLine } from '../utils/highlight-python'
 
 const props = defineProps<{
   id: string
@@ -74,12 +75,32 @@ const renderedPrompt = computed(() => inlineCode(props.prompt))
 const renderedExplain = computed(() => inlineCode(props.explain))
 
 function inlineCode(s: string): string {
+  // Pull out `code` and **bold** segments first so escapes don't mangle them,
+  // then HTML-escape the rest.
+  const parts: string[] = []
+  let i = 0
+  const re = /(`[^`]+`)|(\*\*[^*]+\*\*)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > i) {
+      parts.push(escapeText(s.slice(i, m.index)))
+    }
+    if (m[1]) {
+      parts.push(`<code>${highlightPythonLine(m[1].slice(1, -1))}</code>`)
+    } else if (m[2]) {
+      parts.push(`<strong>${escapeText(m[2].slice(2, -2))}</strong>`)
+    }
+    i = re.lastIndex
+  }
+  if (i < s.length) parts.push(escapeText(s.slice(i)))
+  return parts.join('')
+}
+
+function escapeText(s: string): string {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
 }
 
 function playTone(freqs: number[], duration = 0.18) {
@@ -166,15 +187,48 @@ function reveal() {
 }
 
 .mc-code {
-  background: var(--vp-c-bg-mute);
+  background: #1e1e2e;
+  color: #e4e4e8;
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: 12px 14px;
   font-size: 13px;
+  line-height: 1.6;
   margin: 8px 0 12px;
   overflow-x: auto;
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
 }
-.mc-line { display: inline-block; width: 100%; padding: 0 4px; border-radius: 3px; }
-.mc-line.highlight { background: rgba(245, 158, 11, 0.18); }
+.mc-code code { background: transparent; color: inherit; padding: 0; font-size: inherit; }
+.mc-line { display: flex; gap: 10px; align-items: flex-start; padding: 0 4px; border-radius: 3px; white-space: pre; }
+.mc-line.highlight { background: rgba(245, 158, 11, 0.22); }
+.mc-line-no {
+  flex-shrink: 0;
+  width: 20px;
+  text-align: right;
+  color: #6a6a7c;
+  user-select: none;
+  font-size: 11.5px;
+}
+.mc-line-text { flex: 1; }
+
+.mc-code :deep(.hl-kw)  { color: #c678dd; font-weight: 600; }
+.mc-code :deep(.hl-bi)  { color: #61afef; }
+.mc-code :deep(.hl-str) { color: #98c379; }
+.mc-code :deep(.hl-num) { color: #d19a66; }
+.mc-code :deep(.hl-com) { color: #7d8590; font-style: italic; }
+.mc-code :deep(.hl-op)  { color: #56b6c2; }
+
+.mc-prompt :deep(code) :deep(.hl-kw),
+.mc-explain :deep(code) :deep(.hl-kw)  { color: #a626a4; font-weight: 600; }
+.mc-prompt :deep(code) :deep(.hl-bi),
+.mc-explain :deep(code) :deep(.hl-bi)  { color: #4078f2; }
+.mc-prompt :deep(code) :deep(.hl-str),
+.mc-explain :deep(code) :deep(.hl-str) { color: #50a14f; }
+.mc-prompt :deep(code) :deep(.hl-num),
+.mc-explain :deep(code) :deep(.hl-num) { color: #c18401; }
+.mc-prompt :deep(code) :deep(.hl-com),
+.mc-explain :deep(code) :deep(.hl-com) { color: #a0a1a7; font-style: italic; }
+.mc-prompt :deep(code) :deep(.hl-op),
+.mc-explain :deep(code) :deep(.hl-op)  { color: #0184bc; }
 
 .mc-options {
   display: flex;
