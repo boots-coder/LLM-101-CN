@@ -59,6 +59,12 @@
       ><span class="lc-line-no">{{ String(idx + 1).padStart(2, ' ') }}</span><span class="lc-line-text" v-html="highlightPythonLine(line) || '&nbsp;'"></span></span></code></pre>
     </section>
 
+    <AlgoTrace
+      v-if="algoTraces && algoTraces.length"
+      :traces="algoTraces"
+      :solution-code="problem.solutionCode"
+    />
+
     <div class="lc-questions-head">
       <h4>🧠 理解检验</h4>
       <span class="lc-questions-sub">每题都对应解法的某一行或某个决策</span>
@@ -98,7 +104,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { problems } from '../../../leetcode/_data/problems/index'
+import { getTraces } from '../../../leetcode/_data/traces/index'
 import { highlightPythonLine } from '../utils/highlight-python'
+import AlgoTrace from './AlgoTrace.vue'
 import {
   loadState, saveState, refillHearts, loseHeart,
   addXp, bumpStreak, recordAnswer, markProblemCompleted
@@ -113,6 +121,7 @@ const problem = computed(() => problems[props.problemId])
 const total = computed(() => problem.value?.microQuestions.length ?? 0)
 const visibleQuestions = computed(() => problem.value?.microQuestions ?? [])
 const solutionLines = computed(() => (problem.value?.solutionCode ?? '').split('\n'))
+const algoTraces = computed(() => getTraces(props.problemId))
 
 const state = ref(loadState())
 const hearts = computed(() => state.value.hearts)
