@@ -35,10 +35,12 @@ prereqs: [/engineering/safety, /deep-dives/safety-gcg]
 ::: tip benchmark 在闭环里的位置
 对齐工作有一个标准的 **「攻击 → 评估 → 防御」** 闭环：
 
-```
-攻击方法 (GCG/PAIR/TAP/...) ──▶ 标准化 behavior 集 ──▶ 自动 judge ──▶ ASR 数字
-                                                                       │
-                                防御方法 (RLHF/Llama Guard/RR/...) ◀────┘
+```mermaid
+flowchart LR
+    A["攻击方法 (GCG/PAIR/TAP/...)"] --> B["标准化 behavior 集"]
+    B --> C["自动 judge"]
+    C --> D(["ASR 数字"])
+    D --> E["防御方法 (RLHF/Llama Guard/RR/...)"]
 ```
 
 HarmBench 的角色是闭环中间的 **基础设施层**：定义 behavior、定义攻击接口、定义打分。攻击方与防御方都要落到同一把尺子上，不再各说各话。

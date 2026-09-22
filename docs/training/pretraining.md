@@ -10,12 +10,14 @@ prereqs: [architecture/gpt]
 
 ## 在大模型体系中的位置
 
-```
-预训练（本章）──> SFT 微调 ──> RLHF/DPO 对齐 ──> 部署推理
-   │                │              │
-   │                │              └─ 偏好数据（chosen/rejected）
-   │                └─ 指令数据（instruction-response）
-   └─ 海量无标注文本（万亿 token）
+```mermaid
+flowchart LR
+    A["预训练（本章）"] --> B["SFT 微调"]
+    B --> C["RLHF/DPO 对齐"]
+    C --> D["部署推理"]
+    A --- A1>"海量无标注文本（万亿 token）"]
+    B --- B1>"指令数据（instruction-response）"]
+    C --- C1>"偏好数据（chosen/rejected）"]
 ```
 
 预训练是整个流水线中**计算量最大、耗时最长、成本最高**的阶段。以 Llama 3 70B 为例，预训练在 15T token 上进行，消耗约 6.4M GPU-hours（H100）。但正是这一阶段赋予模型所有的基础能力——后续的 SFT 和 RLHF 只是在预训练的基础上"激活"和"对齐"。
@@ -260,12 +262,11 @@ $$L(c_{\text{test}}) \propto c_{\text{test}}^{-\gamma}$$
 2. **训练计算和推理计算可以互换**：在某些任务上，一个小模型 + 大量推理计算，可以匹敌大模型 + 少量推理计算
 3. **最优分配**：给定总预算（训练 + 推理），应该在两者之间寻找最优分配
 
-```
-传统 Scaling:       推理 Scaling:
-  更大模型 → 更好      更多推理步骤 → 更好
-  1B → 7B → 70B       1 step → 10 steps → 100 steps
-  训练时确定能力        推理时释放能力
-```
+| 传统 Scaling | 推理 Scaling |
+| --- | --- |
+| 更大模型 → 更好 | 更多推理步骤 → 更好 |
+| 1B → 7B → 70B | 1 step → 10 steps → 100 steps |
+| 训练时确定能力 | 推理时释放能力 |
 
 这意味着 Scaling Laws 的维度从"预训练三角"（$N, D, C_{\text{train}}$）扩展到了四维：$N, D, C_{\text{train}}, C_{\text{test}}$。
 
@@ -462,25 +463,19 @@ params = fit_and_plot_scaling_law(N_experiment, loss_experiment,
 
 原始网页数据极其嘈杂，需要多层清洗：
 
-```
-原始 Common Crawl 快照
-    │
-    ├── 1. URL 过滤：移除成人站点、广告站点、已知低质量域名
-    │
-    ├── 2. 语言识别：使用 fastText 分类器，保留目标语言（如英文 > 0.65）
-    │
-    ├── 3. 质量过滤：
-    │       ├── 基于规则：行长度、特殊字符比例、重复行比例
-    │       ├── 基于困惑度：用 KenLM 计算 perplexity，过滤高困惑度文档
-    │       └── 基于分类器：训练质量分类器（以 Wikipedia 为正例）
-    │
-    ├── 4. 去重：
-    │       ├── 精确去重：文档级 SHA-256 哈希
-    │       └── 模糊去重：MinHash + LSH（下文详述）
-    │
-    └── 5. 去污染：移除与评测集（MMLU, HumanEval 等）重叠的内容
-
-    最终保留约 10-15% 的原始数据
+```mermaid
+flowchart TD
+    SRC(["原始 Common Crawl 快照"]) --> F1["1. URL 过滤：移除成人站点、广告站点、已知低质量域名"]
+    F1 --> F2["2. 语言识别：使用 fastText 分类器，保留目标语言（如英文 > 0.65）"]
+    F2 --> F3["3. 质量过滤"]
+    F3 --> F3A["基于规则：行长度、特殊字符比例、重复行比例"]
+    F3 --> F3B["基于困惑度：用 KenLM 计算 perplexity，过滤高困惑度文档"]
+    F3 --> F3C["基于分类器：训练质量分类器（以 Wikipedia 为正例）"]
+    F3 --> F4["4. 去重"]
+    F4 --> F4A["精确去重：文档级 SHA-256 哈希"]
+    F4 --> F4B["模糊去重：MinHash + LSH（下文详述）"]
+    F4 --> F5["5. 去污染：移除与评测集（MMLU, HumanEval 等）重叠的内容"]
+    F5 --> OUT(["最终保留约 10-15% 的原始数据"])
 ```
 
 ### FineWeb 与 RedPajama

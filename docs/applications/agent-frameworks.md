@@ -12,15 +12,18 @@ Agent 框架将 LLM 的推理能力与工具调用、状态管理、多智能体
 
 ## 在大模型体系中的位置
 
-```
-大模型应用层
-├── Prompt Engineering（提示工程）
-├── RAG（检索增强生成）
-├── Agent（智能体）
-│   ├── Agent 基础概念 ← 见 agents.md
-│   └── Agent 开发框架 ◄── 你在这里
-├── Fine-tuning（微调）
-└── 评估与对齐
+```mermaid
+flowchart TD
+    Root["大模型应用层"]
+    Root --> PE["Prompt Engineering（提示工程）"]
+    Root --> RAG["RAG（检索增强生成）"]
+    Root --> AG["Agent（智能体）"]
+    Root --> FT["Fine-tuning（微调）"]
+    Root --> EV["评估与对齐"]
+    AG --> AB["Agent 基础概念"]
+    AG --> AF["Agent 开发框架"]
+    AB --- Ref>"见 agents.md"]
+    AF --- Here>"★ 你在这里"]
 ```
 
 在 [Agent 智能体](./agents.md) 一章中我们理解了 Agent 的核心概念——ReAct 循环、工具调用、记忆与规划。本章聚焦**工程实践**：如何用成熟的框架高效构建生产级 Agent 系统。
@@ -29,15 +32,18 @@ Agent 框架将 LLM 的推理能力与工具调用、状态管理、多智能体
 
 ### 四大主流框架对比
 
-```
-                    抽象层级
-          低 ◄──────────────────► 高
-          │                        │
-    LangGraph                  CrewAI
-    (状态机编排)             (角色扮演)
-          │                        │
-    LlamaIndex Agents          AutoGen
-    (数据增强)              (对话驱动)
+```mermaid
+flowchart LR
+    subgraph LowSide["抽象层级：低"]
+        LG["LangGraph<br/>(状态机编排)"]
+        LI["LlamaIndex Agents<br/>(数据增强)"]
+    end
+    subgraph HighSide["抽象层级：高"]
+        CA["CrewAI<br/>(角色扮演)"]
+        AU["AutoGen<br/>(对话驱动)"]
+    end
+    LG <-->|抽象层级| CA
+    LI <-->|抽象层级| AU
 ```
 
 | 框架 | 核心理念 | 优势 | 适用场景 |
@@ -53,19 +59,16 @@ LangGraph 是 LangChain 团队推出的 Agent 编排框架，核心思想是用*
 
 ### 核心概念
 
-```
-┌──────────────────────────────────────────────────┐
-│            LangGraph Core Concepts               │
-│                                                  │
-│  StateGraph   - Stateful directed graph          │
-│  State        - Shared state across all nodes    │
-│  Node         - Function that performs compute   │
-│  Edge         - Connection between nodes         │
-│  Conditional  - Dynamic routing based on state   │
-│    Edge                                          │
-│  Checkpointer - Persistence (memory + resume)    │
-│                                                  │
-└──────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph LGC["LangGraph Core Concepts"]
+        SG["StateGraph"] --> SGD["Stateful directed graph"]
+        ST["State"] --> STD["Shared state across all nodes"]
+        ND["Node"] --> NDD["Function that performs compute"]
+        ED["Edge"] --> EDD["Connection between nodes"]
+        CE["Conditional Edge"] --> CED["Dynamic routing based on state"]
+        CP["Checkpointer"] --> CPD["Persistence (memory + resume)"]
+    end
 ```
 
 ### State 状态模式设计
@@ -407,27 +410,25 @@ multi_agent = graph.compile()
 
 #### 三种 Multi-Agent 模式对比
 
-```
-Supervisor（主管模式）         Hierarchical（层级模式）
-┌──────────┐                  ┌──────────┐
-│ Supervisor│                  │  Leader   │
-└────┬──┬──┘                  └────┬──┬──┘
-     │  │                          │  │
-  ┌──▼┐ ┌▼──┐                 ┌───▼┐ ┌▼───┐
-  │ R │ │ W │                 │Sup1│ │Sup2│
-  └───┘ └───┘                 └─┬──┘ └──┬─┘
-                               ┌▼┐ ┌▼┐ ┌▼┐ ┌▼┐
-                               │A│ │B│ │C│ │D│
-                               └─┘ └─┘ └─┘ └─┘
-
-Peer-to-Peer（对等模式）
-  ┌───┐ ←→ ┌───┐
-  │ A │    │ B │
-  └─┬─┘    └─┬─┘
-    │    ↕    │
-  ┌─▼────────▼─┐
-  │     C      │
-  └────────────┘
+```mermaid
+flowchart TD
+    subgraph SUP["Supervisor（主管模式）"]
+        S["Supervisor"] --> SR["R"]
+        S --> SW["W"]
+    end
+    subgraph HIER["Hierarchical（层级模式）"]
+        L["Leader"] --> H1["Sup1"]
+        L --> H2["Sup2"]
+        H1 --> HA["A"]
+        H1 --> HB["B"]
+        H2 --> HC["C"]
+        H2 --> HD["D"]
+    end
+    subgraph P2P["Peer-to-Peer（对等模式）"]
+        PA["A"] <--> PB["B"]
+        PA <--> PC["C"]
+        PB <--> PC
+    end
 ```
 
 ### LangSmith 调试与监控
@@ -536,9 +537,12 @@ GraphRAG 将**知识图谱**与 LLM 检索结合，解决传统 RAG 在全局问
 
 ### GraphRAG Pipeline
 
-```
-文档 → Entity Extraction → Graph Construction → Community Detection → Query
-         (实体抽取)         (图构建)             (社区发现)          (查询)
+```mermaid
+flowchart LR
+    D(["文档"]) --> EE["Entity Extraction<br/>(实体抽取)"]
+    EE --> GC["Graph Construction<br/>(图构建)"]
+    GC --> CD["Community Detection<br/>(社区发现)"]
+    CD --> Q(["Query<br/>(查询)"])
 ```
 
 ```python
@@ -977,23 +981,14 @@ if __name__ == "__main__":
 
 执行流程可视化：
 
-```
-用户消息
-    │
-    ▼
-┌─────────┐   has tool_calls   ┌────────┐
-│  Agent  │ ─────────────────►│ Tools  │
-│  (LLM)  │ ◄─────────────── │(Execute)│
-└────┬────┘   tool results    └────────┘
-     │
-     │ no tool_calls
-     ▼
-┌───────────────┐
-│Update Profile │ ── update long-term memory
-└──────┬────────┘
-       │
-       ▼
-      END
+```mermaid
+flowchart TD
+    U(["用户消息"]) --> A["Agent<br/>(LLM)"]
+    A -->|has tool_calls| T[["Tools<br/>(Execute)"]]
+    T -->|tool results| A
+    A -->|no tool_calls| P[("Update Profile")]
+    P --- Note>"update long-term memory"]
+    P --> Fin(["END"])
 ```
 
 ## 苏格拉底时刻

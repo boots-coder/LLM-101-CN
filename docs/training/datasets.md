@@ -9,14 +9,11 @@ topics: [dataset, data-cleaning, MinHash, deduplication, chat-template, syntheti
 
 ## 在大模型体系中的位置
 
-```
-数据集构建（本章）
-    │
-    ├── 预训练数据 ──> 预训练阶段（万亿 token 无标注文本）
-    │
-    ├── SFT 数据 ──> 监督微调阶段（万级~十万级指令-回答对）
-    │
-    └── 偏好数据 ──> RLHF/DPO 对齐阶段（万级 chosen/rejected 对）
+```mermaid
+flowchart LR
+    DS["数据集构建（本章）"] --> A["预训练数据"] --> A2["预训练阶段（万亿 token 无标注文本）"]
+    DS --> B["SFT 数据"] --> B2["监督微调阶段（万级~十万级指令-回答对）"]
+    DS --> C["偏好数据"] --> C2["RLHF/DPO 对齐阶段（万级 chosen/rejected 对）"]
 ```
 
 数据贯穿整个 LLM 训练流水线。每个阶段对数据的规模、格式和质量要求截然不同。
@@ -323,12 +320,16 @@ The rewritten prompt must be reasonable, understood by humans, and answerable.
 
 让模型对同一问题生成多个回答，用 reward model 打分，只保留高分回答。
 
-```
-Input: "解释量子纠缠"
-├── 回答 1 (reward=0.85) ✓ 保留
-├── 回答 2 (reward=0.32) ✗ 丢弃
-├── 回答 3 (reward=0.91) ✓ 保留
-└── 回答 4 (reward=0.45) ✗ 丢弃
+```mermaid
+flowchart TD
+    I["Input: #quot;解释量子纠缠#quot;"] --> R1["回答 1 (reward=0.85)"]
+    I --> R2["回答 2 (reward=0.32)"]
+    I --> R3["回答 3 (reward=0.91)"]
+    I --> R4["回答 4 (reward=0.45)"]
+    R1 --> KEEP(["✓ 保留"])
+    R3 --> KEEP
+    R2 --> DROP(["✗ 丢弃"])
+    R4 --> DROP
 ```
 
 Llama 3 在 SFT 阶段就大量使用 rejection sampling 来筛选训练数据。

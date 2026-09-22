@@ -16,12 +16,10 @@ DeepSeek-R1 是 2025 年初最具影响力的开源推理模型，其核心创�
 
 传统做法是先收集人工标注的推理过程（SFT 阶段），再做偏好对齐。R1 证明了一条更优路径：
 
-```
-Base Model (无推理能力)
-    ↓  RL 训练 (GRPO + 规则奖励)
-R1-Zero (涌现 CoT，但格式混乱)
-    ↓  少量 SFT 数据做格式规范
-R1 (结构化推理 + 高质量输出)
+```mermaid
+flowchart TD
+    BASE(["Base Model (无推理能力)"]) -->|"RL 训练 (GRPO + 规则奖励)"| ZERO["R1-Zero (涌现 CoT，但格式混乱)"]
+    ZERO -->|"少量 SFT 数据做格式规范"| R1(["R1 (结构化推理 + 高质量输出)"])
 ```
 
 ### "Aha Moment"——推理能力的涌现
@@ -377,20 +375,18 @@ R1 的核心假设是：**推理能力可以从 Base 模型通过 RL 直接涌�
 
 verl 的 PPO/GRPO 训练流程基于 Ray 分布式框架：
 
-```
-┌─────────────────────────────────────────┐
-│              RayPPOTrainer              │
-│                                         │
-│  ┌──────────┐  ┌──────────┐  ┌───────┐ │
-│  │  Actor    │  │ Rollout  │  │  Ref  │ │
-│  │ (训练)   │  │ (推理)   │  │ Policy│ │
-│  └────┬─────┘  └────┬─────┘  └───┬───┘ │
-│       │              │            │      │
-│       └──────────────┼────────────┘      │
-│                      ↓                   │
-│              ResourcePool               │
-│           (GPU 资源共享管理)              │
-└─────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph TR["RayPPOTrainer"]
+        direction TB
+        AC["Actor<br/>(训练)"]
+        RO["Rollout<br/>(推理)"]
+        RP["Ref Policy"]
+        POOL["ResourcePool<br/>(GPU 资源共享管理)"]
+        AC --> POOL
+        RO --> POOL
+        RP --> POOL
+    end
 ```
 
 ### main_ppo.py 核心流程
@@ -441,23 +437,16 @@ verl 的 Worker 支持 `fsdp`/`fsdp2`（PyTorch 原生分布式）和 `megatron`
 
 slime 框架的核心优势是 **训推完全分离**：
 
-```
-┌──────────────────────────────────────────┐
-│              Ray Cluster                 │
-│                                          │
-│  ┌────────────────┐  ┌────────────────┐  │
-│  │  Training GPU  │  │  Rollout GPU   │  │
-│  │  (Megatron)    │  │  (sglang)      │  │
-│  │                │  │                │  │
-│  │  GPU 0,1       │  │  GPU 2,3       │  │
-│  │  TP=2          │  │  TP=2          │  │
-│  └───────┬────────┘  └───────┬────────┘  │
-│          │                   │           │
-│          └───────┬───────────┘           │
-│                  ↓                       │
-│          Async Data Buffer               │
-│      (训练和推理异步交换数据)              │
-└──────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph CL["Ray Cluster"]
+        direction TB
+        TG["Training GPU<br/>(Megatron)<br/>GPU 0,1<br/>TP=2"]
+        RG["Rollout GPU<br/>(sglang)<br/>GPU 2,3<br/>TP=2"]
+        BUF[("Async Data Buffer<br/>(训练和推理异步交换数据)")]
+        TG --> BUF
+        RG --> BUF
+    end
 ```
 
 与 verl 的同步模式相比，slime 的异步架构有几个显著优势：

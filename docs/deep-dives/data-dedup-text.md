@@ -19,22 +19,19 @@ prereqs: [/training/datasets, /deep-dives/data-pipeline-datatrove]
 
 一条标准的预训练数据流大致是：
 
-```
-原始抓取 (CommonCrawl / 自有语料)
-   ↓
-语言识别 + 编码修复  ← 噪声最大、最便宜
-   ↓
-URL/MD5 精确去重     ← 第一道闸：把完全相同的 HTML 删掉
-   ↓
-质量过滤 (perplexity / classifier)
-   ↓
-近似去重 (MinHash / SimHash)   ← 本文重点：段落级
-   ↓
-Suffix Array 子串去重           ← 本文重点：跨文档长子串
-   ↓
-(可选) 语义去重 (embedding cluster)
-   ↓
-最终训练语料
+```mermaid
+flowchart TD
+    A(["原始抓取 (CommonCrawl / 自有语料)"]) --> B["语言识别 + 编码修复"]
+    B --> C["URL/MD5 精确去重"]
+    C --> D["质量过滤 (perplexity / classifier)"]
+    D --> E["近似去重 (MinHash / SimHash)"]
+    E --> F["Suffix Array 子串去重"]
+    F --> G["(可选) 语义去重 (embedding cluster)"]
+    G --> H(["最终训练语料"])
+    N1>"噪声最大、最便宜"] -.- B
+    N2>"第一道闸：把完全相同的 HTML 删掉"] -.- C
+    N3>"本文重点：段落级"] -.- E
+    N4>"本文重点：跨文档长子串"] -.- F
 ```
 
 为什么去重要放在质量过滤**之后**？因为质量过滤会扔掉大量低质文档，先过滤再去重可以把 MinHash / SimHash 的候选对数量减少一个数量级，省下的 IO 远超过滤本身的开销。但 URL / MD5 这种 O(N) 精确去重要放在最前面，因为它几乎免费。

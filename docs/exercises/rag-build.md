@@ -11,8 +11,14 @@ topics: [build, RAG, retrieval, embedding, vector-store, BM25, hybrid-search, re
 
 从零搭建一个端到端可运行的 RAG 系统，覆盖完整链路：
 
-```
-document loader → chunker → embedder → vector store → retriever → reranker → generator
+```mermaid
+flowchart LR
+    A["document loader"] --> B["chunker"]
+    B --> C["embedder"]
+    C --> D[("vector store")]
+    D --> E1["retriever"]
+    E1 --> F["reranker"]
+    F --> G["generator"]
 ```
 
 不依赖 LangChain / LlamaIndex 等高层框架。所有核心组件手写，最终要在一个小知识库（~50 条 FAQ）上跑通"问 → 检索 → 引用回答"全流程。
@@ -34,45 +40,28 @@ GPT 挑战是"一个模型从头训"，RAG 挑战是"多个模块拼系统"。�
 
 ## 系统架构总览
 
-```
-                    ┌─────────────────────────────────────────┐
-                    │          离线索引阶段（Indexing）        │
-                    └─────────────────────────────────────────┘
-   raw docs                                                        
-      │                                                            
-      ▼                                                            
- ┌─────────┐    ┌─────────┐    ┌──────────┐    ┌──────────────┐
- │ Loader  │───▶│ Chunker │───▶│ Embedder │───▶│ Vector Store │
- └─────────┘    └─────────┘    └──────────┘    └──────────────┘
-                     │              │                  │
-                     ▼              │                  │
-                ┌─────────┐         │                  │
-                │ BM25    │◀────────┘                  │
-                │ Index   │                            │
-                └─────────┘                            │
-                                                       │
-                    ┌─────────────────────────────────────────┐
-                    │          在线查询阶段（Querying）        │
-                    └─────────────────────────────────────────┘
-   query                                                          │
-      │                                                            │
-      ▼                                                            │
- ┌──────────┐   ┌──────────────┐   ┌──────────┐   ┌──────────┐    │
- │ Rewriter │──▶│  Retriever   │◀──┤  Stores  │◀──┘          │    │
- │ (HyDE/   │   │ Dense+Sparse │   │  (Dense  │              │    │
- │  Multi-Q)│   │   via RRF    │   │  + BM25) │              │    │
- └──────────┘   └──────────────┘   └──────────┘              │    │
-                       │                                     │    │
-                       ▼                                     │    │
-                 ┌──────────┐    ┌─────────┐    ┌────────┐  │    │
-                 │ Reranker │───▶│ Context │───▶│ LLM    │──┘    │
-                 │ (Cross-  │    │ Builder │    │ Gen +  │       │
-                 │ Encoder) │    │         │    │ Cite   │       │
-                 └──────────┘    └─────────┘    └────────┘       │
-                                                       │         │
-                                                       ▼         │
-                                                  answer +       │
-                                                  [doc_id]       │
+```mermaid
+flowchart TD
+    subgraph IDX["离线索引阶段（Indexing）"]
+        RAW(["raw docs"]) --> LOADER["Loader"]
+        LOADER --> CHUNKER["Chunker"]
+        CHUNKER --> EMBEDDER["Embedder"]
+        EMBEDDER --> VSTORE[("Vector Store")]
+        CHUNKER --> BM25[("BM25<br/>Index")]
+        EMBEDDER --> BM25
+    end
+
+    subgraph QRY["在线查询阶段（Querying）"]
+        QUERY(["query"]) --> REWRITER["Rewriter<br/>(HyDE/Multi-Q)"]
+        REWRITER --> RETRIEVER["Retriever<br/>Dense+Sparse<br/>via RRF"]
+        STORES[("Stores<br/>(Dense + BM25)")] --> RETRIEVER
+        RETRIEVER --> RERANKER["Reranker<br/>(Cross-Encoder)"]
+        RERANKER --> CTXB["Context<br/>Builder"]
+        CTXB --> LLM["LLM<br/>Gen + Cite"]
+        LLM --> ANSWER(["answer +<br/>[doc_id]"])
+    end
+
+    VSTORE --> STORES
 ```
 
 ::: warning 实现顺序建议
@@ -989,9 +978,12 @@ for q in test_queries:
 
 **核心改动：**
 
-```
-chunker → 【新增】实体抽取（用 LLM 提取 entity / relation） → 建图
-retriever → 【新增】图上做 community detection / multi-hop walk → 子图作为额外 context
+```mermaid
+flowchart LR
+    C["chunker"] --> EX["【新增】实体抽取<br/>（用 LLM 提取 entity / relation）"]
+    EX --> GRAPH["建图"]
+    R["retriever"] --> WALK["【新增】图上做<br/>community detection / multi-hop walk"]
+    WALK --> SUB["子图作为额外 context"]
 ```
 
 参考开源实现：[`refrences-projects/graphrag/`](https://github.com/microsoft/graphrag)。**注意：参考思路即可，禁止照抄代码**。

@@ -10,18 +10,16 @@ prereqs: [training/alignment]
 
 ## 在大模型体系中的位置
 
-```
-预训练 (Pre-training)          → 学习语言知识和世界知识
-    ↓
-监督微调 (SFT)                 → 学习指令跟随能力
-    ↓
-偏好对齐 (RLHF/DPO/GRPO)      → 学习人类偏好，安全有用
-    ↓
-推理增强  ← 你在这里            → 在推理时花更多计算换更好结果
-  ├── PRM + Best-of-N          → 过程奖励引导搜索
-  ├── MCTS + LLM               → 树搜索式推理
-  ├── GRPO for Reasoning        → DeepSeek-R1 方案
-  └── 推理蒸馏                  → 大模型 CoT → 小模型
+```mermaid
+flowchart TD
+    A["预训练 (Pre-training)<br/>学习语言知识和世界知识"] --> B["监督微调 (SFT)<br/>学习指令跟随能力"]
+    B --> C["偏好对齐 (RLHF/DPO/GRPO)<br/>学习人类偏好，安全有用"]
+    C --> D["推理增强<br/>在推理时花更多计算换更好结果"]
+    HERE>"★ 你在这里"] --- D
+    D --> E1["PRM + Best-of-N<br/>过程奖励引导搜索"]
+    D --> E2["MCTS + LLM<br/>树搜索式推理"]
+    D --> E3["GRPO for Reasoning<br/>DeepSeek-R1 方案"]
+    D --> E4["推理蒸馏<br/>大模型 CoT → 小模型"]
 ```
 
 传统大模型在生成每个 token 时花费的计算量是固定的。推理模型的核心洞察是：**困难问题需要更多的思考时间**。这与人类的 System 2 Thinking 类似——面对复杂数学题，我们不会瞬间给出答案，而是会一步步推导。
@@ -164,16 +162,17 @@ class ProcessRewardModel(nn.Module):
 
 MCTS 是一种在大搜索空间中寻找最优策略的树搜索算法。在 LLM 推理中，我们将**生成过程看作树搜索**：
 
-```
-Root = Question
-          │
-    ┌─────┼─────────┐
-    ↓     ↓         ↓
-  Step1a  Step1b  Step1c     ← Different first reasoning steps
-    │       │       │
-  ┌─┼─┐   ┌┼┐     ┌┼┐
-  ↓ ↓ ↓   ↓ ↓     ↓ ↓
- ...       ...     ...       ← Different follow-up reasoning
+```mermaid
+flowchart TD
+    ROOT(["Root = Question"])
+    ROOT --> S1A["Step1a"]
+    ROOT --> S1B["Step1b"]
+    ROOT --> S1C["Step1c"]
+    N1>"Different first reasoning steps"] --- S1B
+    S1A --> L1["..."]
+    S1B --> L2["..."]
+    S1C --> L3["..."]
+    N2>"Different follow-up reasoning"] --- L2
 ```
 
 ### MCTS 四步循环
@@ -288,18 +287,14 @@ DeepSeek-R1 提出了一个令人兴奋的发现：**不需要复杂的 Reward M
 
 训练流程：
 
-```
-基座模型 (DeepSeek-V3-Base)
-    ↓
-冷启动 SFT（少量高质量 CoT 数据）
-    ↓
-GRPO + 规则奖励（大规模 RL 训练）        ← 核心阶段
-    ↓
-拒绝采样 + SFT（格式规范化）
-    ↓
-再次 GRPO（进一步提升 + 对齐）
-    ↓
-DeepSeek-R1
+```mermaid
+flowchart TD
+    A(["基座模型 (DeepSeek-V3-Base)"]) --> B["冷启动 SFT（少量高质量 CoT 数据）"]
+    B --> C["GRPO + 规则奖励（大规模 RL 训练）"]
+    N1>"核心阶段"] --- C
+    C --> D["拒绝采样 + SFT（格式规范化）"]
+    D --> E["再次 GRPO（进一步提升 + 对齐）"]
+    E --> F(["DeepSeek-R1"])
 ```
 
 ### R1 多阶段训练的真实细节（论文 §3.2）
@@ -667,13 +662,13 @@ solution based on the thinking directly now.\n</think>.\n\n"
 
 **后训练四阶段**（page 9，Figure 1）。旗舰模型 Qwen3-235B-A22B 与 Qwen3-32B 走完整流水线：
 
-```
-Base Model
-   ↓ Stage 1：Long-CoT Cold Start         （在数学/代码/STEM 上做 long-CoT SFT 打底）
-   ↓ Stage 2：Reasoning RL                （GRPO，仅 ~3995 query-verifier 对）
-   ↓ Stage 3：Thinking Mode Fusion        （继续 SFT，融合 thinking + non-thinking 数据）
-   ↓ Stage 4：General RL                  （20+ 任务的 reward 系统：指令、格式、Agent、RAG…）
-Qwen3 旗舰
+```mermaid
+flowchart TD
+    A(["Base Model"]) --> S1["Stage 1：Long-CoT Cold Start<br/>（在数学/代码/STEM 上做 long-CoT SFT 打底）"]
+    S1 --> S2["Stage 2：Reasoning RL<br/>（GRPO，仅 ~3995 query-verifier 对）"]
+    S2 --> S3["Stage 3：Thinking Mode Fusion<br/>（继续 SFT，融合 thinking + non-thinking 数据）"]
+    S3 --> S4["Stage 4：General RL<br/>（20+ 任务的 reward 系统：指令、格式、Agent、RAG…）"]
+    S4 --> Q(["Qwen3 旗舰"])
 ```
 
 论文披露 Stage 2 的 RL 把 Qwen3-235B-A22B 在 AIME'24 上从 70.1 拉到 85.1，整个 RL 只跑了 170 步（page 11）。
@@ -693,14 +688,11 @@ Qwen3 旗舰
 
 推理蒸馏的核心思路：**用大推理模型（如 DeepSeek-R1、O1）生成包含详细推理过程的数据，然后用这些数据对小模型进行 SFT**。
 
-```
-大推理模型（Teacher）                  小模型（Student）
-         │                                 │
-    生成高质量 CoT 推理数据 ──────→  用 CoT 数据进行 SFT
-         │                                 │
-  "设宽为x，长为2x，              "设宽为x，长为2x，
-   周长=2(x+2x)=6x=24，            周长=2(x+2x)=6x=24，
-   x=4，面积=4×8=32"               x=4，面积=4×8=32"
+```mermaid
+flowchart LR
+    T["大推理模型（Teacher）"] -->|"生成高质量 CoT 推理数据"| S["小模型（Student）<br/>用 CoT 数据进行 SFT"]
+    T --- TN>"#quot;设宽为x，长为2x，<br/>周长=2(x+2x)=6x=24，<br/>x=4，面积=4×8=32#quot;"]
+    S --- SN>"#quot;设宽为x，长为2x，<br/>周长=2(x+2x)=6x=24，<br/>x=4，面积=4×8=32#quot;"]
 ```
 
 DeepSeek-R1 的实验表明：**用 R1 生成的 80 万条推理数据微调 Qwen-2.5-32B，效果接近甚至超过用 RL 直接训练**。

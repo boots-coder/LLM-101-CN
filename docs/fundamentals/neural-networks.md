@@ -10,14 +10,22 @@ prereqs: [fundamentals/math]
 
 ## 在大模型体系中的位置
 
-```
-神经网络 ◄── 你在这里
-  ├── MLP          → Transformer FFN 层的核心组件
-  ├── 激活函数      → GELU (GPT), SwiGLU (Llama) 的选择依据
-  ├── 反向传播      → 模型训练的核心算法
-  ├── 损失函数      → 交叉熵驱动 next-token prediction
-  ├── 优化器        → AdamW 是大模型训练的标配
-  └── 正则化        → LayerNorm, Dropout 的取舍
+```mermaid
+flowchart LR
+    NN["神经网络"]
+    NN -.- HERE>"★ 你在这里"]
+    NN --> A["MLP"]
+    A --> A1["Transformer FFN 层的核心组件"]
+    NN --> B["激活函数"]
+    B --> B1["GELU (GPT), SwiGLU (Llama) 的选择依据"]
+    NN --> C["反向传播"]
+    C --> C1["模型训练的核心算法"]
+    NN --> D["损失函数"]
+    D --> D1["交叉熵驱动 next-token prediction"]
+    NN --> E1["优化器"]
+    E1 --> E2["AdamW 是大模型训练的标配"]
+    NN --> F["正则化"]
+    F --> F1["LayerNorm, Dropout 的取舍"]
 ```
 
 ---

@@ -99,6 +99,7 @@ export default withMermaid(
               { text: 'GPT 架构', link: '/architecture/gpt' },
               { text: 'Llama 架构', link: '/architecture/llama' },
               { text: 'DeepSeek-V3', link: '/architecture/deepseek' },
+              { text: '高效注意力', link: '/architecture/efficient-attention' },
               { text: 'Scaling Laws', link: '/architecture/scaling-laws' },
               { text: 'Flow Matching', link: '/architecture/flow-matching' },
             ],
@@ -313,7 +314,22 @@ export default withMermaid(
     },
 
     mermaid: {
-      theme: 'default',
+      // 只用内置主题名，不要设 themeVariables 颜色——插件在暗色模式下会把 theme 覆盖成
+      // 'dark'，但 themeVariables 会残留下来，写死颜色会导致暗色模式不可读。
+      // 'neutral' 是灰阶内置主题，与站点单色设计语言一致。
+      theme: 'neutral',
+      // 不要设 fontFamily：mermaid 用配置字体测量文本宽度、却用 CSS 字体渲染，
+      // 两者不一致会让中文标签的换行点算错，导致文字溢出节点方框。
+      flowchart: {
+        // mermaid 对中文的宽度测量不准：自动换行后算出的节点高度仍按换行前的行数，
+        // 导致文字溢出方框。把换行宽度放大到基本不触发自动换行，换行一律由
+        // 标签里显式的 <br/> 控制（显式换行的高度计算是准的）。
+        wrappingWidth: 500,
+        padding: 12,
+        nodeSpacing: 46,
+        rankSpacing: 52,
+        useMaxWidth: true,
+      },
     },
   })
 )

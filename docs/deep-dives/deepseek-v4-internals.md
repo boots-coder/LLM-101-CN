@@ -15,23 +15,19 @@ prereqs: [architecture/deepseek, architecture/attention, training/pretraining, t
 
 ## V4 一图概览
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                       DeepSeek-V4 系列（2026-04 preview）           │
-│                                                                     │
-│  V4-Flash ── 284B / 13B 激活 / 43 层 / d=4096 / 32T tokens          │
-│           │  256 routed + 1 shared expert / Top-6 / inter=2048      │
-│           │                                                         │
-│  V4-Pro ─── 1.6T / 49B 激活 / 61 层 / d=7168 / 33T tokens           │
-│           │  384 routed + 1 shared expert / Top-6 / inter=3072      │
-│           │                                                         │
-│  Attention  Hybrid（CSA + HCA 交替） + 前 2 层 SWA + n_win=128       │
-│  Residual   mHC，扩展系数 n_hc=4，Sinkhorn-Knopp t_max=20            │
-│  Optimizer  Muon（主体）+ AdamW（embedding / head / RMSNorm / mHC）  │
-│  Stability  Anticipatory Routing + SwiGLU Clamping([-10,10] / cap10) │
-│  Training   FP8 主体 + FP4 QAT（MoE 权重 + CSA 索引器 QK 路径）     │
-│  Post-Train Specialist (SFT + GRPO + GRM) → On-Policy Distillation   │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph DSV4["DeepSeek-V4 系列（2026-04 preview）"]
+        direction TB
+        Flash["V4-Flash<br/>284B / 13B 激活 / 43 层 / d=4096 / 32T tokens<br/>256 routed + 1 shared expert / Top-6 / inter=2048"]
+        Pro["V4-Pro<br/>1.6T / 49B 激活 / 61 层 / d=7168 / 33T tokens<br/>384 routed + 1 shared expert / Top-6 / inter=3072"]
+        Attn["Attention<br/>Hybrid（CSA + HCA 交替） + 前 2 层 SWA + n_win=128"]
+        Res["Residual<br/>mHC，扩展系数 n_hc=4，Sinkhorn-Knopp t_max=20"]
+        Opt["Optimizer<br/>Muon（主体）+ AdamW（embedding / head / RMSNorm / mHC）"]
+        Stab["Stability<br/>Anticipatory Routing + SwiGLU Clamping([-10,10] / cap10)"]
+        Train["Training<br/>FP8 主体 + FP4 QAT（MoE 权重 + CSA 索引器 QK 路径）"]
+        Post["Post-Train<br/>Specialist (SFT + GRPO + GRM) → On-Policy Distillation"]
+    end
 ```
 
 | 维度 | V3.2 | V4-Flash | V4-Pro | 出处 |
@@ -54,10 +50,20 @@ V4 不是 V3 的扩参数版——它把"超长序列效率"作为第一性约�
 
 V4 的 transformer block（§2，Figure 2）整体结构：
 
-```
-Embedding → [Pre-Block Mixing → CSA/HCA → Post-Block Mixing → ⊕ residual
-            → Pre-Block Mixing → DeepSeekMoE → Post-Block Mixing → ⊕] × L
-            → Prediction Head + MTP Modules
+```mermaid
+flowchart LR
+    E(["Embedding"]) --> LB
+    subgraph LB["× L 层"]
+        direction LR
+        P1["Pre-Block Mixing"] --> A1["CSA / HCA"]
+        A1 --> Q1["Post-Block Mixing"]
+        Q1 --> R1["⊕ residual"]
+        R1 --> P2["Pre-Block Mixing"]
+        P2 --> M1["DeepSeekMoE"]
+        M1 --> Q2["Post-Block Mixing"]
+        Q2 --> R2["⊕"]
+    end
+    LB --> H(["Prediction Head + MTP Modules"])
 ```
 
 **Mixing** 即 mHC 的 A_l / B_l / C_l 三个映射；**⊕** 是 residual 加法。下面分别展开两条 attention 路径。
@@ -99,22 +105,23 @@ HCA（Heavily Compressed Attention，§2.3.2）和 CSA 的差别只在两点：
 1. **压缩率拉到 $m' \gg m$**（V4 取 $m=4$, $m'=128$，即每 128 个 token 压成 1 条）。
 2. **不做 top-k 选择**——压完之后直接对全部压缩 entry 做 dense MQA。
 
-```
-HCA 工作流：
-  H ──(W^KV)──→ C ∈ R^{n×c}
-  H ──(W^Z) ──→ Z ∈ R^{n×c}
-                │
-                ▼
-  每 m' 条 C 在 Z 的 softmax 权重下合并 ──→ C^Comp ∈ R^{(n/m')×c}
-                │
-                ▼
-  q_t ──→ c^Q_t (低秩) ──→ {q_{t,1}, ..., q_{t,n_h}}
-                │
-                ▼
-  CoreAttn(query=q_{t,i}, key=C^Comp, value=C^Comp)  // 不再 top-k
-                │
-                ▼
-  Grouped Output Projection ──→ d 维输出
+```mermaid
+flowchart TD
+    subgraph HCAW["HCA 工作流"]
+        direction TB
+        H(["H"]) -->|"W^KV"| C["C ∈ R^&#123;n×c&#125;"]
+        H -->|"W^Z"| Z["Z ∈ R^&#123;n×c&#125;"]
+        C --> MG["每 m' 条 C 在 Z 的 softmax 权重下合并"]
+        Z --> MG
+        MG --> CC["C^Comp ∈ R^&#123;(n/m')×c&#125;"]
+        QT(["q_t"]) --> CQ["c^Q_t (低秩)"]
+        CQ --> QH["&#123;q_&#123;t,1&#125;, ..., q_&#123;t,n_h&#125;&#125;"]
+        CC --> AT["CoreAttn(query=q_&#123;t,i&#125;, key=C^Comp, value=C^Comp)"]
+        QH --> AT
+        AT --> GOP["Grouped Output Projection"]
+        GOP --> OUT(["d 维输出"])
+        NT>"不再 top-k"] -.- AT
+    end
 ```
 
 直觉：**CSA 看"近 + 选出来的远"，HCA 看"远的摘要全景"**。两者交错叠层，互补长短程。
@@ -337,8 +344,11 @@ V4 完全替换了 V3.2 的"混合 RL"阶段——改成：**先训领域专家�
 
 每个领域（数学 / 代码 / 智能体 / 指令跟随）独立训一个专家：
 
-```
-Base ─→ 领域 SFT ─→ 领域 GRPO RL（带 GRM 评估） ─→ 专家模型 π_E_i
+```mermaid
+flowchart LR
+    A(["Base"]) --> B["领域 SFT"]
+    B --> C["领域 GRPO RL（带 GRM 评估）"]
+    C --> D(["专家模型 π_E_i"])
 ```
 
 两个亮点：

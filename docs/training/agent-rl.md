@@ -10,18 +10,16 @@ prereqs: [training/alignment, applications/agents]
 
 ## 在大模型体系中的位置
 
-```
-预训练 (Pre-training)           → 学习语言知识和世界知识
-    ↓
-监督微调 (SFT)                  → 学习指令跟随能力
-    ↓
-偏好对齐 (RLHF / DPO / GRPO)   → 学习人类偏好，安全有用
-    ↓
-Agent-RL  ← 你在这里             → 在环境中学习使用工具、规划、纠错
-  ├── 代码执行环境               → 写代码并运行，根据结果学习
-  ├── Web 浏览环境               → 搜索、点击、填表，完成网页任务
-  ├── 工具调用环境               → 学习何时、如何调用 API/工具
-  └── 多 Agent 对抗环境          → 通过竞争博弈提升能力
+```mermaid
+flowchart TD
+    A["预训练 (Pre-training)<br/>学习语言知识和世界知识"] --> B["监督微调 (SFT)<br/>学习指令跟随能力"]
+    B --> C["偏好对齐 (RLHF / DPO / GRPO)<br/>学习人类偏好，安全有用"]
+    C --> D["Agent-RL<br/>在环境中学习使用工具、规划、纠错"]
+    HERE>"★ 你在这里"] --- D
+    D --> E1["代码执行环境<br/>写代码并运行，根据结果学习"]
+    D --> E2["Web 浏览环境<br/>搜索、点击、填表，完成网页任务"]
+    D --> E3["工具调用环境<br/>学习何时、如何调用 API/工具"]
+    D --> E4["多 Agent 对抗环境<br/>通过竞争博弈提升能力"]
 ```
 
 偏好对齐（如 DPO / GRPO）让模型学会"说什么更好"，但 Agent-RL 更进一步——让模型学会"怎么做事"。这里的"做事"意味着模型需要在真实环境中执行动作、观察结果、调整策略，最终完成任务。
@@ -75,21 +73,17 @@ trajectory = [
 
 Agent-RL 的训练循环与传统 RL 本质相同，但策略 (policy) 是一个大语言模型，动作空间 (action space) 是自然语言：
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                  Agent-RL Training Loop                   │
-│                                                          │
-│   ┌──────────┐  Action (text/tool call) ┌────────────┐  │
-│   │  Policy  │ ───────────────────────→ │Environment │  │
-│   │  (LLM)   │                          │(Sandbox/   │  │
-│   │          │ ←─────────────────────── │ Web/Tools) │  │
-│   └──────────┘  Observation (result)    └────────────┘  │
-│        ↑                                      │         │
-│        │            ┌──────────┐              │         │
-│        └─────────── │  Reward  │ ←────────────┘         │
-│     Policy Update   │  Signal  │                        │
-│                     └──────────┘                        │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph LOOP["Agent-RL Training Loop"]
+        P["Policy<br/>(LLM)"]
+        E["Environment<br/>(Sandbox / Web / Tools)"]
+        R["Reward<br/>Signal"]
+        P -->|"Action (text/tool call)"| E
+        E -->|"Observation (result)"| P
+        E --> R
+        R -->|"Policy Update"| P
+    end
 ```
 
 ### 三大核心组件
@@ -322,12 +316,12 @@ class AsyncRolloutWorker:
 
 slime 使用 [SGLang](https://github.com/sgl-project/sglang) 作为推理引擎，通过 Router 分发请求到多个 SGLang worker：
 
-```
-                    ┌──── SGLang Worker 0 (GPU 0)
-                    │
-Request ──→ Router ─┼──── SGLang Worker 1 (GPU 1)
-                    │
-                    └──── SGLang Worker 2 (GPU 2)
+```mermaid
+flowchart LR
+    REQ(["Request"]) --> RT["Router"]
+    RT --> W0["SGLang Worker 0 (GPU 0)"]
+    RT --> W1["SGLang Worker 1 (GPU 1)"]
+    RT --> W2["SGLang Worker 2 (GPU 2)"]
 ```
 
 关键优化：
@@ -427,15 +421,13 @@ async def batched_custom_rm(args, samples):
 
 RLVE (Reinforcement Learning with Verifiable Environments) 是一种更系统化的奖励获取方式：环境能够 **程序化地生成问题** 并 **自动验证答案**。
 
-```
-┌──────────────────────────────────────────────────┐
-│            Verifiable Environment                │
-│                                                  │
-│  generate_problem()  → Generate new problems     │
-│  verify_answer()     → Verify answer correctness │
-│  adaptive_difficulty → Adjust by model ability   │
-│                                                  │
-└──────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph VENV["Verifiable Environment"]
+        A["generate_problem()<br/>Generate new problems"]
+        B["verify_answer()<br/>Verify answer correctness"]
+        C["adaptive_difficulty<br/>Adjust by model ability"]
+    end
 ```
 
 RLVE 的核心优势：
@@ -469,19 +461,27 @@ slime 是 GLM-4.5 / 4.6 / 4.7 / 5 背后的 RL 训练框架，由清华大学 TH
 
 ### 整体架构
 
-```
-┌──────────────────┐      ┌──────────────────┐      ┌──────────────────────┐
-│                  │      │                  │      │                      │
-│    Training      │ ←─── │   Data Buffer    │ ←─── │      Rollout         │
-│   (Megatron)     │      │                  │      │  (SGLang + Router)   │
-│                  │ ───→ │                  │      │                      │
-│  · Grad Update   │      │  · Prompt Mgmt   │      │  · Trajectory Gen    │
-│  · Param Sync    │      │  · Data Buffer   │      │  · Reward Compute    │
-│  · Checkpoint    │      │  · Custom Data   │      │  · Dynamic Filter    │
-│                  │      │                  │      │                      │
-└────────┬─────────┘      └──────────────────┘      └──────────┬───────────┘
-         │                                                     ↑
-         └──────────────── Parameter Sync ─────────────────────┘
+```mermaid
+flowchart LR
+    subgraph TR["Training (Megatron)"]
+        T1["· Grad Update"]
+        T2["· Param Sync"]
+        T3["· Checkpoint"]
+    end
+    subgraph DB["Data Buffer"]
+        D1["· Prompt Mgmt"]
+        D2["· Data Buffer"]
+        D3["· Custom Data"]
+    end
+    subgraph RO["Rollout (SGLang + Router)"]
+        R1["· Trajectory Gen"]
+        R2["· Reward Compute"]
+        R3["· Dynamic Filter"]
+    end
+    RO --> DB
+    DB --> TR
+    TR --> DB
+    TR -->|"Parameter Sync"| RO
 ```
 
 ### 三大模块详解

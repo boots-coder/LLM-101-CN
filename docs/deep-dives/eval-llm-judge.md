@@ -70,7 +70,7 @@ flowchart LR
     M1 --> P[组装 judge prompt<br/>system + question + A + B]
     M2 --> P
     P --> J[Judge 模型<br/>GPT-4 / GPT-4-Turbo]
-    J -->|MT-Bench 路径| T1[文本 [[A]]/[[B]]/[[C]]]
+    J -->|MT-Bench 路径| T1["文本 [[A]]/[[B]]/[[C]]"]
     J -->|AlpacaEval 路径| T2[token logprob<br/>m / M]
     T1 --> R1[正则解析]
     T2 --> R2[softmax → 概率]

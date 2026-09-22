@@ -268,25 +268,19 @@ $$
 
 MT-Bench 是 LLM-as-a-Judge 的经典实现，专门评测多轮对话能力：
 
-```
-┌──────────────────────────────────────────────────┐
-│ MT-Bench Evaluation Pipeline                     │
-│                                                  │
-│ 1. 80 questions (8 categories x 10)              │
-│    Categories: Writing, Roleplay, Reasoning,     │
-│    Math, Coding, Extraction, STEM, Humanities    │
-│                                                  │
-│ 2. Two-turn dialogue per question                │
-│    Turn 1: Open-ended question                   │
-│    Turn 2: Follow-up with constraints            │
-│    e.g. "Write a poem about spring"              │
-│         -> "Rewrite as a haiku"                  │
-│                                                  │
-│ 3. GPT-4 scores each turn 1-10                   │
-│    Uses reference answers for grading            │
-│                                                  │
-│ 4. Final Score = Average across all turns        │
-└──────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph MTB["MT-Bench Evaluation Pipeline"]
+        S1["1. 80 questions (8 categories x 10)<br/>Categories: Writing, Roleplay, Reasoning,<br/>Math, Coding, Extraction, STEM, Humanities"]
+        S2["2. Two-turn dialogue per question"]
+        T1["Turn 1: Open-ended question<br/>e.g. #quot;Write a poem about spring#quot;"]
+        T2["Turn 2: Follow-up with constraints<br/>-> #quot;Rewrite as a haiku#quot;"]
+        S3["3. GPT-4 scores each turn 1-10<br/>Uses reference answers for grading"]
+        S4(["4. Final Score = Average across all turns"])
+        S1 --> S2
+        S2 --> T1 --> T2
+        T2 --> S3 --> S4
+    end
 ```
 
 ### 代码实现：构建一个简单的 LLM Judge
@@ -388,27 +382,38 @@ LMSYS 的 Chatbot Arena 是目前公认最有价值的人类评估平台：
 
 一个严谨的人类评估需要：
 
-```
-1. 定义评估维度
-   ├── 准确性：事实是否正确
-   ├── 有用性：是否真正回答了问题
-   ├── 安全性：是否包含有害内容
-   └── 流畅性：表达是否自然
+```mermaid
+flowchart TD
+    S1["1. 定义评估维度"] --> S2["2. 编写标注指南"] --> S3["3. 试标注 + 校准"] --> S4["4. 正式标注"]
 
-2. 编写标注指南
-   ├── 每个维度的评分标准（1-5 分各对应什么水平）
-   ├── 边界案例的处理规则
-   └── 至少 5 个标注示例（含正反面）
+    subgraph D1["评估维度"]
+        A1["准确性：事实是否正确"]
+        A2["有用性：是否真正回答了问题"]
+        A3["安全性：是否包含有害内容"]
+        A4["流畅性：表达是否自然"]
+    end
+    S1 --> D1
 
-3. 试标注 + 校准
-   ├── 3-5 名标注员标注相同的 50 条样本
-   ├── 计算一致性，讨论分歧
-   └── 修订标注指南
+    subgraph D2["标注指南内容"]
+        B1["每个维度的评分标准<br/>（1-5 分各对应什么水平）"]
+        B2["边界案例的处理规则"]
+        B3["至少 5 个标注示例（含正反面）"]
+    end
+    S2 --> D2
 
-4. 正式标注
-   ├── 每条样本至少 2-3 人标注
-   ├── 随机插入质检题（gold set）
-   └── 定期计算一致性指标
+    subgraph D3["试标注 + 校准动作"]
+        C1["3-5 名标注员标注相同的 50 条样本"]
+        C2["计算一致性，讨论分歧"]
+        C3["修订标注指南"]
+    end
+    S3 --> D3
+
+    subgraph D4["正式标注要求"]
+        E1["每条样本至少 2-3 人标注"]
+        E2["随机插入质检题（gold set）"]
+        E3["定期计算一致性指标"]
+    end
+    S4 --> D4
 ```
 
 ### 一致性指标：Cohen's Kappa
@@ -550,28 +555,38 @@ lighteval accelerate \
 
 **面试场景**："你需要评估一个新训练的 7B 对话模型，如何设计评估方案？"
 
-```
-第一层：自动化 Benchmark（快速、低成本）
-├── 知识类：MMLU / MMLU-Pro
-├── 推理类：GSM8K / MATH / BBH
-├── 代码类：HumanEval / MBPP
-├── 指令遵循：IFEval
-└── 安全性：TruthfulQA
+```mermaid
+flowchart TD
+    subgraph L1["第一层：自动化 Benchmark（快速、低成本）"]
+        A1["知识类：MMLU / MMLU-Pro"]
+        A2["推理类：GSM8K / MATH / BBH"]
+        A3["代码类：HumanEval / MBPP"]
+        A4["指令遵循：IFEval"]
+        A5["安全性：TruthfulQA"]
+    end
 
-第二层：LLM-as-a-Judge（中等成本）
-├── MT-Bench（多轮对话）
-├── AlpacaEval 2.0（开放对话）
-└── 自定义领域评测（用 GPT-4 评判）
+    subgraph L2["第二层：LLM-as-a-Judge（中等成本）"]
+        B1["MT-Bench（多轮对话）"]
+        B2["AlpacaEval 2.0（开放对话）"]
+        B3["自定义领域评测（用 GPT-4 评判）"]
+    end
 
-第三层：人类评估（高成本、金标准）
-├── 内部小规模评测（10-50 条核心场景）
-├── A/B 测试（对比上一版本）
-└── 安全红队测试（专项测试有害内容）
+    subgraph L3["第三层：人类评估（高成本、金标准）"]
+        C1["内部小规模评测（10-50 条核心场景）"]
+        C2["A/B 测试（对比上一版本）"]
+        C3["安全红队测试（专项测试有害内容）"]
+    end
 
-贯穿始终：
-├── 污染检测：检查训练数据是否包含测试集
-├── 消融实验：对比不同训练配置的效果差异
-└── 案例分析：人工审查 bad case，定性了解模型弱点
+    subgraph L4["贯穿始终"]
+        D1["污染检测：检查训练数据是否包含测试集"]
+        D2["消融实验：对比不同训练配置的效果差异"]
+        D3["案例分析：人工审查 bad case，定性了解模型弱点"]
+    end
+
+    L1 --> L2 --> L3
+    L4 -.- L1
+    L4 -.- L2
+    L4 -.- L3
 ```
 
 ### 高频面试问答

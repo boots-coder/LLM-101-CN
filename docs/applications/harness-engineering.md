@@ -13,9 +13,11 @@ Harness 工程不设计 Agent 本身的能力，而是设计 Agent **赖以运�
 
 ## 在大模型体系中的位置
 
-```
-提示词工程 → RAG 工程 → Agent 工程 → Harness 工程
-   (单次调用)   (知识注入)   (自主行动)   (生产环境治理)
+```mermaid
+flowchart LR
+    P["提示词工程<br/>(单次调用)"] --> R["RAG 工程<br/>(知识注入)"]
+    R --> A["Agent 工程<br/>(自主行动)"]
+    A --> H["Harness 工程<br/>(生产环境治理)"]
 ```
 
 Harness 工程是 Agent 工程的上层抽象。Agent 工程关心"如何完成一个任务"，Harness 工程关心"如何让 Agent 在**长期、大规模**运行中不跑偏"。
@@ -67,14 +69,15 @@ OpenAI Codex 团队最初把所有指导信息塞进一个巨大的 AGENTS.md—
 
 **解决方案：两层信息结构**
 
-```
-第一层（索引/目录）── 始终在上下文中
-    ├── "架构请看 docs/DESIGN.md"
-    ├── "前端规范请看 docs/FRONTEND.md"
-    └── "安全请看 docs/SECURITY.md"
+```mermaid
+flowchart TD
+    L1["第一层（索引/目录）<br/>始终在上下文中"]
+    L1 --> I1["&quot;架构请看 docs/DESIGN.md&quot;"]
+    L1 --> I2["&quot;前端规范请看 docs/FRONTEND.md&quot;"]
+    L1 --> I3["&quot;安全请看 docs/SECURITY.md&quot;"]
 
-第二层（详细内容）── 按需加载
-    └── Agent 需要某领域知识时，按图索骥去读
+    L2["第二层（详细内容）<br/>按需加载"]
+    L2 --> D1["Agent 需要某领域知识时，按图索骥去读"]
 ```
 
 这就是**渐进式披露**（Progressive Disclosure）：Agent 启动时只加载最小量核心信息，然后根据任务需要逐步加载更深层文档。
@@ -98,10 +101,13 @@ Vercel 的 v0 产品发现**移除 80% 可用工具**反而产生了更好的结
 
 会话存储、文件系统即状态模式、基于 git 的进度跟踪、checkpoint/resume。
 
-```
-Anthropic 的推荐模式：
-初始化 Agent → 生成 feature list → 写入 progress file
-每次新 session → 读 progress file + git log → 恢复上下文
+```mermaid
+flowchart LR
+    subgraph Anthropic["Anthropic 的推荐模式"]
+        direction LR
+        A1(["初始化 Agent"]) --> A2["生成 feature list"] --> A3[("写入 progress file")]
+        B1(["每次新 session"]) --> B2["读 progress file + git log"] --> B3["恢复上下文"]
+    end
 ```
 
 ### 4. 验证与反馈循环
@@ -110,8 +116,12 @@ Anthropic 的推荐模式：
 
 **最小可行 Harness = 一个反馈回路：**
 
-```
-人类意图 → Agent 执行 → 自动验证 → 通过则完成 / 不通过则重试
+```mermaid
+flowchart LR
+    I(["人类意图"]) --> E["Agent 执行"]
+    E --> V{"自动验证"}
+    V -->|通过| D(["完成"])
+    V -->|不通过| E
 ```
 
 三要素：
@@ -203,15 +213,15 @@ Eric Gerl 提出五类 Harness 架构：
 
 ThoughtWorks 的 Birgitta Böckeler 提供了另一种分解：
 
-```
-Harness 机制
-├── 前馈 Guides（行动前施加的约束）
-│   ├── 计算性的（确定性）── lint、类型检查
-│   └── 推理性的（LLM 驱动）── 规划 Agent
-│
-└── 反馈 Sensors（观察后施加的修正）
-    ├── 计算性的（确定性）── 测试结果
-    └── 推理性的（LLM 驱动）── 审查 Agent
+```mermaid
+flowchart TD
+    H["Harness 机制"]
+    H --> G["前馈 Guides<br/>（行动前施加的约束）"]
+    H --> S["反馈 Sensors<br/>（观察后施加的修正）"]
+    G --> G1["计算性的（确定性）<br/>lint、类型检查"]
+    G --> G2["推理性的（LLM 驱动）<br/>规划 Agent"]
+    S --> S1["计算性的（确定性）<br/>测试结果"]
+    S --> S2["推理性的（LLM 驱动）<br/>审查 Agent"]
 ```
 
 ## 术语辨析

@@ -542,15 +542,22 @@ token_r:    -κk  -κk  -κk  -κk  -κk  -κk + R
 **KL 用 K1 而不是 K3**：在 PPO 里 KL 是作为"reward 的负贡献"出现的，K1 = `-log r` 是无偏估计，与 reward 的"有正有负"语义自然对应。GRPO 把 KL 直接塞 loss，需要恒非负，所以选 K3。
 
 **完整 PPO 拼装链路（对照本练习 1-6）**：
-```
-rollout → shape_token_rewards (Ex.6)
-       → compute_gae (Ex.2)
-       → ppo_epochs 内：
-           importance_ratio (Ex.1)
-         + kl_estimators (Ex.5)
-         → policy_surrogate_loss (Ex.3)
-         + value_clipped_loss (Ex.4)
-         → backward
+```mermaid
+flowchart TD
+    R(["rollout"]) --> SH["shape_token_rewards (Ex.6)"]
+    SH --> GA["compute_gae (Ex.2)"]
+
+    subgraph INNER["ppo_epochs 内"]
+        IR["importance_ratio (Ex.1)"]
+        KL["kl_estimators (Ex.5)"]
+        VL["value_clipped_loss (Ex.4)"]
+        IR --> PL["policy_surrogate_loss (Ex.3)"]
+        KL --> PL
+        PL --> BW(["backward"])
+        VL --> BW
+    end
+
+    GA --> IR
 ```
 
 </details>

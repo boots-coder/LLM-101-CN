@@ -10,14 +10,12 @@ prereqs: [fundamentals/math, fundamentals/neural-networks]
 
 ## 在大模型体系中的位置
 
-```
-基础数学 (Math)                → 概率论、线性代数、微积分
-    ↓
-神经网络基础 (Neural Networks) → MLP、梯度下降、反向传播
-    ↓
-强化学习基础  ← 你在这里        → MDP、Bellman、Q-Learning、Policy Gradient
-    ↓
-偏好对齐 (Alignment)           → RLHF、PPO、DPO、GRPO
+```mermaid
+flowchart TD
+    A["基础数学 (Math)<br/>概率论、线性代数、微积分"] --> B["神经网络基础 (Neural Networks)<br/>MLP、梯度下降、反向传播"]
+    B --> C["强化学习基础<br/>MDP、Bellman、Q-Learning、Policy Gradient"]
+    HERE>"★ 你在这里"] --- C
+    C --> D["偏好对齐 (Alignment)<br/>RLHF、PPO、DPO、GRPO"]
 ```
 
 本章不追求 RL 的大而全，而是 **精准覆盖理解 RLHF/PPO 所需的最小知识集**：从 MDP 框架出发，经 Bellman 方程、Value-based 方法（Q-Learning、DQN），到 Policy Gradient（REINFORCE），最终搭建通往 PPO 的桥梁。
@@ -28,13 +26,10 @@ prereqs: [fundamentals/math, fundamentals/neural-networks]
 
 强化学习的核心范式：**Agent**（智能体）在 **Environment**（环境）中通过试错学习。
 
-```
-          action a_t
-Agent ──────────────────► Environment
-  ▲                           │
-  │    state s_{t+1}          │
-  │    reward r_{t+1}         │
-  └───────────────────────────┘
+```mermaid
+flowchart LR
+    AG["Agent"] -->|"action a_t"| ENV["Environment"]
+    ENV -->|"state s_{t+1}<br/>reward r_{t+1}"| AG
 ```
 
 每一步的交互流程：
@@ -745,13 +740,10 @@ PPO 的三个特性使其成为 RLHF 的首选：
 
 ### 8.2 RLHF 的 RL 视角
 
-```
-┌─────────────┐     prompt + 已生成 tokens     ┌──────────────────┐
-│  LLM (Agent) │ ◄──────────────────────────── │  "Environment"    │
-│  π_θ(y|x)    │ ────────── token y_t ──────► │  Reward Model     │
-└─────────────┘                                │  r = RM(x, y)     │
-                                               │  + KL penalty     │
-                                               └──────────────────┘
+```mermaid
+flowchart LR
+    LLM["LLM (Agent)<br/>π_θ(y|x)"] -->|"token y_t"| ENV["#quot;Environment#quot;<br/>Reward Model<br/>r = RM(x, y)<br/>+ KL penalty"]
+    ENV -->|"prompt + 已生成 tokens"| LLM
 ```
 
 RLHF 的 PPO 目标函数：
@@ -784,25 +776,25 @@ KL 惩罚确保优化后的策略 $\pi_\theta$ 不偏离参考策略 $\pi_\text{
 
 ## 9. RL 方法总览
 
-```
-                    RL 方法分类
-                        │
-        ┌───────────────┼───────────────┐
-     Model-Based     Model-Free       Hybrid
-     (需要环境模型)   (不需要)
-        │               │
-     DP (§3)    ┌───────┼────────┐
-             Value-Based    Policy-Based
-                │               │
-         ┌──────┤          REINFORCE (§7)
-         │      │               │
-      MC (§4)  TD (§5)     Actor-Critic
-                │               │
-         ┌──────┤            TRPO
-         │      │               │
-      SARSA  Q-Learning      PPO ← RLHF 的核心
-                │
-             DQN (§6)
+```mermaid
+flowchart TD
+    ROOT(["RL 方法分类"])
+    ROOT --> MB["Model-Based<br/>(需要环境模型)"]
+    ROOT --> MF["Model-Free<br/>(不需要)"]
+    ROOT --> HY["Hybrid"]
+    MB --> DP["DP (§3)"]
+    MF --> VB["Value-Based"]
+    MF --> PB["Policy-Based"]
+    VB --> MC["MC (§4)"]
+    VB --> TDM["TD (§5)"]
+    TDM --> SARSA["SARSA"]
+    TDM --> QL["Q-Learning"]
+    QL --> DQN["DQN (§6)"]
+    PB --> RF["REINFORCE (§7)"]
+    RF --> AC["Actor-Critic"]
+    AC --> TRPO["TRPO"]
+    TRPO --> PPO["PPO"]
+    PPO --- NOTE>"RLHF 的核心"]
 ```
 
 ## 苏格拉底时刻

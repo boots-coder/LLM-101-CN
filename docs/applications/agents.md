@@ -12,13 +12,15 @@ Agent 让 LLM 从被动回答者变为主动行动者——通过感知环境、
 
 ## 在大模型体系中的位置
 
-```
-大模型应用层
-├── Prompt Engineering（提示工程）
-├── RAG（检索增强生成）
-├── Agent（智能体）◄── 你在这里
-├── Fine-tuning（微调）
-└── 评估与对齐
+```mermaid
+flowchart TD
+    Root["大模型应用层"]
+    Root --> PE["Prompt Engineering（提示工程）"]
+    Root --> RAG["RAG（检索增强生成）"]
+    Root --> AG["Agent（智能体）"]
+    Root --> FT["Fine-tuning（微调）"]
+    Root --> EV["评估与对齐"]
+    AG --- Here>"★ 你在这里"]
 ```
 
 如果说 RAG 让 LLM 获得了"查阅资料"的能力，那 Agent 让 LLM 获得了"动手做事"的能力。Agent 是大模型应用的最高层抽象——它将 LLM 作为"大脑"，配合记忆、工具和规划能力，形成一个自主的智能系统。
@@ -31,19 +33,12 @@ Agent 让 LLM 从被动回答者变为主动行动者——通过感知环境、
 
 ### Agent = LLM + Memory + Tools + Planning
 
-```
-              ┌───────────────────────────┐
-              │        LLM Brain          │
-              │  (Reasoning / Planning)   │
-              └────────┬──────────────────┘
-                       │
-         ┌─────────────┼──────────────────┐
-         │             │                  │
-    ┌────▼─────┐  ┌────▼─────┐    ┌──────▼───────┐
-    │  Memory  │  │  Tools   │    │   Planning   │
-    │ Short +  │  │ Search/  │    │  CoT / ToT   │
-    │ Long-term│  │ Code/API │    │  Task Decomp │
-    └──────────┘  └──────────┘    └──────────────┘
+```mermaid
+flowchart TD
+    Brain["LLM Brain<br/>(Reasoning / Planning)"]
+    Brain --> Mem[("Memory<br/>Short + Long-term")]
+    Brain --> Tools[["Tools<br/>Search / Code / API"]]
+    Brain --> Plan["Planning<br/>CoT / ToT<br/>Task Decomp"]
 ```
 
 四个核心组件：
@@ -406,16 +401,20 @@ def code_executor(code: str) -> str:
 
 对于需要探索多条推理路径的问题，ToT 让模型生成多个可能的思路，评估每条路径的前景，选择最优路径继续：
 
-```
-             问题
-          /   |   \
-       思路A  思路B  思路C
-       /  \    |     |
-      A1  A2   B1   C1  ← 评估每个节点
-      |        |
-     深入     深入   ← 只展开有前景的分支
-      |
-    最终答案
+```mermaid
+flowchart TD
+    Q(["问题"]) --> IA["思路A"]
+    Q --> IB["思路B"]
+    Q --> IC["思路C"]
+    IA --> A1["A1"]
+    IA --> A2["A2"]
+    IB --> B1["B1"]
+    IC --> C1["C1"]
+    C1 --- N1>"评估每个节点"]
+    A1 --> D1["深入"]
+    B1 --> D2["深入"]
+    D2 --- N2>"只展开有前景的分支"]
+    D1 --> F(["最终答案"])
 ```
 
 ### Plan-and-Solve
@@ -513,17 +512,12 @@ class AgentMemory:
 
 #### 主从架构（Orchestrator-Worker）
 
-```
-         ┌───────────────────┐
-         │ Orchestrator Agent│
-         │ (Task Assignment) │
-         └────────┬──────────┘
-        ┌─────────┼──────────┐
-        ▼         ▼          ▼
-   ┌─────────┐ ┌─────────┐ ┌──────────┐
-   │ Search  │ │  Code   │ │ Analysis │
-   │  Agent  │ │  Agent  │ │  Agent   │
-   └─────────┘ └─────────┘ └──────────┘
+```mermaid
+flowchart TD
+    O["Orchestrator Agent<br/>(Task Assignment)"]
+    O --> S["Search<br/>Agent"]
+    O --> C["Code<br/>Agent"]
+    O --> A["Analysis<br/>Agent"]
 ```
 
 #### 辩论架构（Debate）
@@ -539,8 +533,11 @@ Judge:   综合双方观点，最终答案是...
 
 #### 流水线架构（Pipeline）
 
-```
-需求分析 Agent → 代码生成 Agent → 代码审查 Agent → 测试 Agent
+```mermaid
+flowchart LR
+    A["需求分析 Agent"] --> B["代码生成 Agent"]
+    B --> C["代码审查 Agent"]
+    C --> D["测试 Agent"]
 ```
 
 ### 角色分工
@@ -688,9 +685,16 @@ Observation: 订单 #12345 已取消
 
 Function Calling 的核心思想是：**让 LLM 不直接执行操作，而是结构化地输出工具调用参数**，由应用层负责真正的执行。
 
-```
-传统方式：用户 → LLM 生成自然语言描述的操作 → 正则解析（脆弱）→ 执行
-Function Calling：用户 → LLM 生成结构化 JSON → 直接解析 → 执行
+```mermaid
+flowchart LR
+    subgraph Trad["传统方式"]
+        direction LR
+        U1(["用户"]) --> L1["LLM 生成自然语言描述的操作"] --> P1["正则解析（脆弱）"] --> E1["执行"]
+    end
+    subgraph FC["Function Calling"]
+        direction LR
+        U2(["用户"]) --> L2["LLM 生成结构化 JSON"] --> P2["直接解析"] --> E2["执行"]
+    end
 ```
 
 本质上，Function Calling 把 LLM 变成了一个**意图识别 + 参数提取**引擎。模型通过 SFT（有监督微调）学会了根据 JSON Schema 描述和用户意图，输出符合格式的函数调用。这不是"理解"了工具，而是学会了一种**结构化输出模式**。
@@ -981,11 +985,19 @@ Agent 的自主性是一把双刃剑——越自主，风险越大。以下场�
 - **合规要求**：金融、医疗等行业要求关键决策有人类审批记录
 - **成本敏感操作**：调用付费 API、消耗大量计算资源
 
-```
-全自主 Agent（危险）          人机协作 Agent（安全）
-用户 → Agent → 执行          用户 → Agent → 提交计划 → 人类审批 → 执行
-     无人监管                          ↑                      │
-                                       └── 如被拒绝，修改计划 ←┘
+```mermaid
+flowchart LR
+    subgraph Auto["全自主 Agent（危险）"]
+        direction LR
+        U1(["用户"]) --> A1["Agent"] --> E1["执行"]
+        A1 --- N1>"无人监管"]
+    end
+    subgraph HITL["人机协作 Agent（安全）"]
+        direction LR
+        U2(["用户"]) --> A2["Agent"] --> P["提交计划"] --> R{"人类审批"}
+        R --> E2["执行"]
+        R -->|"如被拒绝，修改计划"| P
+    end
 ```
 
 ### 审批模式（Approval Pattern）
@@ -1207,18 +1219,12 @@ class FeedbackLoop:
 
 一个中心 Agent 负责理解任务、分配子任务、汇总结果，其他 Agent 作为专业 Worker 执行具体工作。
 
-```
-                   ┌──────────────────────┐
-                   │   Supervisor Agent   │
-                   │  Parse → Assign →   │
-                   │  Aggregate → Reply  │
-                   └────────┬─────────────┘
-              ┌─────────────┼─────────────┐
-              ▼             ▼             ▼
-       ┌──────────────┐ ┌───────────┐ ┌───────────┐
-       │Research Agent│ │Code Agent │ │Data Agent │
-       │ (Info Search)│ │(Write Code)│ │(Analysis) │
-       └──────────────┘ └───────────┘ └───────────┘
+```mermaid
+flowchart TD
+    S["Supervisor Agent<br/>Parse → Assign →<br/>Aggregate → Reply"]
+    S --> R["Research Agent<br/>(Info Search)"]
+    S --> C["Code Agent<br/>(Write Code)"]
+    S --> D["Data Agent<br/>(Analysis)"]
 ```
 
 **优点：** 控制流清晰，易于调试和监控，Supervisor 可以做全局优化
@@ -1273,20 +1279,21 @@ class SupervisorAgent:
 
 类似企业组织架构，分为多个管理层级。顶层 Agent 管理中层 Agent，中层 Agent 再管理底层执行 Agent。
 
-```
-                    ┌───────────────────┐
-                    │    CEO Agent      │
-                    │ Strategy/Planning │
-                    └────────┬──────────┘
-              ┌──────────────┼───────────────┐
-              ▼              ▼               ▼
-      ┌──────────────┐ ┌───────────┐ ┌────────────┐
-      │  Dev Manager │ │ Marketing │ │    Ops     │
-      │  (Dev Tasks) │ │ (Campaigns)│ │(Infra Mgmt)│
-      └──────┬───────┘ └────┬──────┘ └─────┬──────┘
-        ┌────┼────┐     ┌───┼───┐     ┌────┼────┐
-        ▼    ▼    ▼     ▼   ▼   ▼     ▼    ▼    ▼
-      Front Back  QA  Copy Design SEO Monitor Deploy Sec
+```mermaid
+flowchart TD
+    CEO["CEO Agent<br/>Strategy/Planning"]
+    CEO --> DM["Dev Manager<br/>(Dev Tasks)"]
+    CEO --> MK["Marketing<br/>(Campaigns)"]
+    CEO --> OPS["Ops<br/>(Infra Mgmt)"]
+    DM --> F["Front"]
+    DM --> B["Back"]
+    DM --> QA["QA"]
+    MK --> CP["Copy"]
+    MK --> DS["Design"]
+    MK --> SEO["SEO"]
+    OPS --> MON["Monitor"]
+    OPS --> DEP["Deploy"]
+    OPS --> SEC["Sec"]
 ```
 
 **适用场景：** 大型复杂项目，如自动化软件开发（MetaGPT 就采用类似架构）
@@ -1297,15 +1304,11 @@ class SupervisorAgent:
 
 没有中心协调者，每个 Agent 地位平等，通过共享消息总线或直接通信来协作。
 
-```
-      ┌──────────┐  Messages  ┌──────────┐
-      │ Agent A  │◄──────────►│ Agent B  │
-      │ (Search) │            │(Analysis)│
-      └─────┬────┘            └─────┬────┘
-            │      ┌──────────┐     │
-            └─────►│ Agent C  │◄────┘
-                   │ (Writer) │
-                   └──────────┘
+```mermaid
+flowchart TD
+    A["Agent A<br/>(Search)"] <-->|Messages| B["Agent B<br/>(Analysis)"]
+    A --> C["Agent C<br/>(Writer)"]
+    B --> C
 ```
 
 **典型实现：** 辩论模式——多个 Agent 对同一问题发表观点，互相质疑和补充。
@@ -1361,12 +1364,9 @@ Agent 之间的通信协议是 Multi-Agent 系统的基础设施。
 
 MCP 是 Anthropic 提出的开放协议，旨在标准化 LLM 与外部工具/数据源的连接方式。
 
-```
-┌──────────────┐    MCP Protocol     ┌──────────────┐
-│  LLM App     │ ◄──────────────────►│  MCP Server  │
-│ (MCP Client) │   JSON-RPC over     │ (Tools/Data) │
-│              │   stdio / SSE       │              │
-└──────────────┘                     └──────────────┘
+```mermaid
+flowchart LR
+    App["LLM App<br/>(MCP Client)"] <-->|"MCP Protocol<br/>JSON-RPC over<br/>stdio / SSE"| Srv[["MCP Server<br/>(Tools/Data)"]]
 ```
 
 MCP 的核心价值：
@@ -1378,11 +1378,9 @@ MCP 的核心价值：
 
 Google 提出的 A2A 协议，专注于 Agent 之间的互操作：
 
-```
-┌────────────┐  A2A Protocol  ┌────────────┐
-│  Agent A   │ ◄─────────────►│  Agent B   │
-│ (Client)   │  HTTP + JSON   │ (Server)   │
-└────────────┘                └────────────┘
+```mermaid
+flowchart LR
+    A["Agent A<br/>(Client)"] <-->|"A2A Protocol<br/>HTTP + JSON"| B["Agent B<br/>(Server)"]
 ```
 
 A2A 定义了：

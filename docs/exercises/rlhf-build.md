@@ -25,38 +25,33 @@ RLHF 实现的痛点不在「公式」（看起来都很简单），而在**三�
 
 ## 三阶段总览
 
-```
-                      ┌─────────────────────────────────────────────┐
-                      │         RLHF Pipeline (本练习)               │
-                      └─────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph PIPE["RLHF Pipeline (本练习)"]
+        subgraph ST1["阶段 1 SFT"]
+            D1(["prompt + response"]) --> M1["GPT-2 small"]
+            M1 --> L1["masked CE loss<br/>(只算 response 部分)"]
+            L1 --> PSFT["π_SFT （初始策略）"]
+        end
 
-阶段 1 SFT                阶段 2 RM                  阶段 3 PPO
-─────────────────         ────────────────────       ────────────────────────────
- prompt + response         (prompt, chosen,           prompt-only batch
-        │                  rejected)                       │
-        ▼                       │                          ▼ rollout (sample)
- GPT-2 small                    ▼                   ┌──────────────────┐
-        │                  GPT-2 + scalar head      │  policy (π_θ)    │ ←── update
-   masked CE loss          ──────────────────       │  ref policy (π_0)│ ←── frozen
-   (只算 response 部分)    BT loss:                 │  value head V_φ  │ ←── update
-        │                  -log σ(r_c − r_r)        │  reward model RM │ ←── frozen
-        ▼                       │                   └──────────────────┘
-   π_SFT （初始策略）            ▼                          │
-        │                  RM_φ                            ▼
-        │                       │                    rollout 张量
-        │                       │                          │
-        └────────────────►──────┴──────────►───────────────▼
-                                                  reward shaping (KL+RM)
-                                                          │
-                                                          ▼
-                                                     compute GAE
-                                                          │
-                                                          ▼
-                                              PPO inner update (K epochs)
-                                                  ratio / clip / value
-                                                          │
-                                                          ▼
-                                                  π_θ ← updated
+        subgraph ST2["阶段 2 RM"]
+            D2(["(prompt, chosen, rejected)"]) --> M2["GPT-2 + scalar head"]
+            M2 --> L2["BT loss:<br/>-log σ(r_c − r_r)"]
+            L2 --> RMPHI["RM_φ"]
+        end
+
+        subgraph ST3["阶段 3 PPO"]
+            D3(["prompt-only batch"]) -->|"rollout (sample)"| MODELS["policy (π_θ) ←── update<br/>ref policy (π_0) ←── frozen<br/>value head V_φ ←── update<br/>reward model RM ←── frozen"]
+            MODELS --> RT["rollout 张量"]
+            RT --> SHAPE["reward shaping (KL+RM)"]
+            SHAPE --> GAE["compute GAE"]
+            GAE --> INNER["PPO inner update (K epochs)<br/>ratio / clip / value"]
+            INNER --> UPD["π_θ ← updated"]
+        end
+    end
+
+    PSFT --> SHAPE
+    RMPHI --> SHAPE
 ```
 
 整条 pipeline 涉及四个模型实例（同一份 backbone 的不同副本）：
@@ -434,13 +429,13 @@ sanity_check_rm(
 
 PPO 需要一个 critic（价值网络）。最常见的设计是 **policy 和 value 共享 backbone**，再各自接一个独立的 head：
 
-```
-input_ids
-    ↓
-GPT-2 backbone (shared)
-    ↓ hidden [B, T, H]
-    ├──→ lm_head    → logits [B, T, V]   (policy)
-    └──→ value_head → values [B, T]      (critic)
+```mermaid
+flowchart TD
+    IN(["input_ids"]) --> BB["GPT-2 backbone (shared)"]
+    BB -->|"hidden [B, T, H]"| LMH["lm_head"]
+    BB -->|"hidden [B, T, H]"| VH["value_head"]
+    LMH --> LOGITS["logits [B, T, V]<br/>(policy)"]
+    VH --> VALUES["values [B, T]<br/>(critic)"]
 ```
 
 ```python
@@ -625,32 +620,17 @@ def ppo_losses(
 
 把以上组件拼成主循环：
 
-```
-┌──────────────────────────── PPO 一个 outer step ─────────────────────────────┐
-│                                                                              │
-│  1. ROLLOUT（policy 是 frozen 的 old policy）                                 │
-│     for prompt in batch:                                                     │
-│         response = policy.generate(prompt, do_sample=True)                   │
-│         old_logprobs, old_values = forward_with_old_policy(prompt+response)  │
-│         ref_logprobs              = forward_with_ref_policy(prompt+response) │
-│         rm_score                  = reward_model(prompt+response)            │
-│                                                                              │
-│  2. REWARD SHAPING                                                           │
-│     token_rewards = -kl_coef * (old_logprobs - ref_logprobs)                 │
-│     token_rewards[last_idx] += rm_score                                      │
-│                                                                              │
-│  3. ADVANTAGE                                                                │
-│     advantages, returns = compute_gae(token_rewards, old_values, mask)       │
-│     # 标准化 advantage（PPO 标准 trick）                                      │
-│     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)│
-│                                                                              │
-│  4. INNER UPDATE（K 个 epoch，复用同一份 rollout）                            │
-│     for _ in range(ppo_epochs):                                              │
-│         new_logprobs, new_values = policy.forward(prompt + response)         │
-│         loss = ppo_losses(...)                                               │
-│         loss.backward(); clip_grad; step; zero_grad                          │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph STEP["PPO 一个 outer step"]
+        P1["1. ROLLOUT（policy 是 frozen 的 old policy）<br/>for prompt in batch:<br/>response = policy.generate(prompt, do_sample=True)<br/>old_logprobs, old_values = forward_with_old_policy(prompt+response)<br/>ref_logprobs = forward_with_ref_policy(prompt+response)<br/>rm_score = reward_model(prompt+response)"]
+        P2["2. REWARD SHAPING<br/>token_rewards = -kl_coef * (old_logprobs - ref_logprobs)<br/>token_rewards[last_idx] += rm_score"]
+        P3["3. ADVANTAGE<br/>advantages, returns = compute_gae(token_rewards, old_values, mask)<br/># 标准化 advantage（PPO 标准 trick）<br/>advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)"]
+        P4["4. INNER UPDATE（K 个 epoch，复用同一份 rollout）<br/>for _ in range(ppo_epochs):<br/>new_logprobs, new_values = policy.forward(prompt + response)<br/>loss = ppo_losses(...)<br/>loss.backward(); clip_grad; step; zero_grad"]
+        P1 --> P2
+        P2 --> P3
+        P3 --> P4
+    end
 ```
 
 ```python

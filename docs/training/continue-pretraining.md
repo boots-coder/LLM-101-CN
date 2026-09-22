@@ -10,16 +10,13 @@ prereqs: [training/pretraining, training/sft]
 
 ## 在大模型体系中的位置
 
-```
-预训练（通用语料）
-   ↓
-继续预训练（领域语料） ◄── 你在这里
-   ↓
-SFT 微调（领域指令数据）
-   ↓
-RLHF/DPO 对齐
-   ↓
-部署推理
+```mermaid
+flowchart TD
+    A["预训练（通用语料）"] --> B["继续预训练（领域语料）"]
+    HERE>"★ 你在这里"] --- B
+    B --> C["SFT 微调（领域指令数据）"]
+    C --> D["RLHF/DPO 对齐"]
+    D --> E(["部署推理"])
 ```
 
 继续预训练处于**预训练**和 **SFT** 之间。它不改变模型架构，只用领域数据延续预训练目标（Next Token Prediction），让模型内化领域知识。

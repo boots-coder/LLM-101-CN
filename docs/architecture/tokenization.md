@@ -12,8 +12,18 @@ prereqs: [fundamentals/nlp-basics]
 
 分词器位于整个 LLM 流水线的最前端和最末端：输入时将文本编码为 Token ID 序列，输出时将模型预测的 Token ID 解码回文本。它不参与模型的核心计算，但它的设计深刻影响着模型能力的上限。一个糟糕的分词器会让模型"看不清"输入，而一个优秀的分词器则能让模型以更少的 Token 表达更丰富的语义。
 
-```
-原始文本 → [分词器编码] → Token ID 序列 → [Embedding 层] → 向量序列 → [Transformer] → 输出向量 → [LM Head] → Token ID → [分词器解码] → 生成文本
+```mermaid
+flowchart LR
+    A(["原始文本"]) --> B["分词器编码"]
+    B --> C["Token ID 序列"]
+    C --> D["Embedding 层"]
+    D --> E1["向量序列"]
+    E1 --> F["Transformer"]
+    F --> G["输出向量"]
+    G --> H["LM Head"]
+    H --> I["Token ID"]
+    I --> J["分词器解码"]
+    J --> K(["生成文本"])
 ```
 
 ## 核心概念

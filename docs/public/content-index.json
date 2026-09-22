@@ -853,6 +853,109 @@
       }
     ]
   },
+  "architecture/efficient-attention.md": {
+    "title": "高效注意力：线性、稀疏与混合",
+    "topics": [
+      "linear-attention",
+      "DeltaNet",
+      "Gated-DeltaNet",
+      "sparse-attention",
+      "DSA",
+      "sliding-window-attention",
+      "hybrid-attention",
+      "Mamba",
+      "SSM",
+      "Qwen3.5",
+      "DeepSeek-V3.2",
+      "KV-cache"
+    ],
+    "sections": [
+      {
+        "heading": "在大模型体系中的位置",
+        "level": 2
+      },
+      {
+        "heading": "为什么 2025 年之后注意力重新成为战场",
+        "level": 2
+      },
+      {
+        "heading": "路线一：线性注意力与 Delta Rule",
+        "level": 2
+      },
+      {
+        "heading": "从 softmax 注意力到线性注意力",
+        "level": 3
+      },
+      {
+        "heading": "状态空间视角：注意力变回了 RNN",
+        "level": 3
+      },
+      {
+        "heading": "Delta Rule：让状态能\"改写\"而不只是\"累加\"",
+        "level": 3
+      },
+      {
+        "heading": "Gated DeltaNet：再加一道全局闸门",
+        "level": 3
+      },
+      {
+        "heading": "路线二：稀疏注意力与 DeepSeek DSA",
+        "level": 2
+      },
+      {
+        "heading": "基本思想与真正的难点",
+        "level": 3
+      },
+      {
+        "heading": "DSA 的解法：lightning indexer",
+        "level": 3
+      },
+      {
+        "heading": "效果与代价",
+        "level": 3
+      },
+      {
+        "heading": "路线三：滑动窗口与混合层",
+        "level": 2
+      },
+      {
+        "heading": "滑动窗口注意力",
+        "level": 3
+      },
+      {
+        "heading": "混合：这才是真正的工业答案",
+        "level": 3
+      },
+      {
+        "heading": "2026 年各家的选择",
+        "level": 2
+      },
+      {
+        "heading": "苏格拉底时刻",
+        "level": 2
+      },
+      {
+        "heading": "常见问题 & 面试考点",
+        "level": 2
+      },
+      {
+        "heading": "推荐资源",
+        "level": 2
+      },
+      {
+        "heading": "论文",
+        "level": 3
+      },
+      {
+        "heading": "官方发布与技术分析",
+        "level": 3
+      },
+      {
+        "heading": "代码参考",
+        "level": 3
+      }
+    ]
+  },
   "architecture/flow-matching.md": {
     "title": "Flow Matching",
     "topics": [

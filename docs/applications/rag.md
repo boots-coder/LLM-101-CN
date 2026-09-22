@@ -12,13 +12,15 @@ RAG 通过在生成前检索相关文档，让 LLM 能够基于外部知识回�
 
 ## 在大模型体系中的位置
 
-```
-大模型应用层
-├── Prompt Engineering（提示工程）
-├── RAG（检索增强生成）◄── 你在这里
-├── Agent（智能体）
-├── Fine-tuning（微调）
-└── 评估与对齐
+```mermaid
+flowchart TD
+    Root["大模型应用层"]
+    Root --> PE["Prompt Engineering（提示工程）"]
+    Root --> RAG["RAG（检索增强生成）"]
+    Root --> AG["Agent（智能体）"]
+    Root --> FT["Fine-tuning（微调）"]
+    Root --> EV["评估与对齐"]
+    RAG --- Here>"★ 你在这里"]
 ```
 
 RAG 处于应用层，是连接"静态模型"与"动态知识"的桥梁。它不修改模型参数，而是通过**检索外部信息**来增强模型的生成能力——这使得 RAG 成为企业落地最广泛的大模型应用模式。
@@ -51,18 +53,18 @@ RAG 处于应用层，是连接"静态模型"与"动态知识"的桥梁。它不
 
 ### Index → Retrieve → Generate
 
-```
-                        Offline Stage (Index)
-┌──────────────────────────────────────────────────────────┐
-│  Documents → Chunking → Embedding Model → Vector Store   │
-└──────────────────────────────────────────────────────────┘
-
-                      Online Stage (Retrieve + Generate)
-┌──────────────────────────────────────────────────────────────┐
-│  User Query → Embedding → Vector Search → Top-K Chunks       │
-│                                             ↓                │
-│                          [Query + Retrieved Chunks] → LLM → Answer │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Offline["Offline Stage (Index)"]
+        direction LR
+        D(["Documents"]) --> CH["Chunking"] --> EM["Embedding Model"] --> VS[("Vector Store")]
+    end
+    subgraph Online["Online Stage (Retrieve + Generate)"]
+        direction LR
+        UQ(["User Query"]) --> QE["Embedding"] --> VSE["Vector Search"] --> TK["Top-K Chunks"]
+        TK --> PR["&#91;Query + Retrieved Chunks&#93;"]
+        PR --> LLM["LLM"] --> AN(["Answer"])
+    end
 ```
 
 三个核心步骤：
@@ -331,8 +333,11 @@ def hybrid_search(query, dense_results, sparse_results, alpha=0.7):
 
 检索返回的 top-k 结果并非都相关。用 Cross-Encoder 重排序可以显著提升精度：
 
-```
-粗检索 top-50 → Cross-Encoder 精排 → 取 top-5 → 送入 LLM
+```mermaid
+flowchart LR
+    A(["粗检索 top-50"]) --> B["Cross-Encoder 精排"]
+    B --> C["取 top-5"]
+    C --> D["送入 LLM"]
 ```
 
 ```python
@@ -389,10 +394,15 @@ def hyde_retrieval(query: str, llm, retriever):
 
 将文档中的实体和关系抽取为知识图谱，实现结构化推理：
 
-```
-文档 → 实体抽取 → 关系抽取 → 知识图谱
-                                  ↓
-用户问题 → 图检索(实体+关系) + 向量检索 → 合并结果 → LLM
+```mermaid
+flowchart LR
+    D(["文档"]) --> EE["实体抽取"] --> RE["关系抽取"] --> KG[("知识图谱")]
+    KG --> GR
+    Q(["用户问题"]) --> GR["图检索(实体+关系)"]
+    Q --> VR["向量检索"]
+    GR --> MG["合并结果"]
+    VR --> MG
+    MG --> L["LLM"]
 ```
 
 Graph RAG 特别适合需要**多跳推理**的问题，例如："张三的导师在哪个大学任教？"需要先找到张三的导师是谁，再找到该导师的大学。
@@ -576,20 +586,14 @@ HyDE 的有效性建立在一个假设上：即使 LLM 的假设答案不准确�
 
 GraphRAG（由 Microsoft Research 提出）通过构建知识图谱，将文档的全局结构显式化。
 
-```
-Documents
-   │
-   ▼
-┌──────────────────────────────────────────────────────┐
-│ 1. Entity Extraction     → Extract named entities    │
-│ 2. Relationship Extraction → Extract relations       │
-│ 3. Graph Construction    → Build knowledge graph     │
-│ 4. Community Detection   → Discover communities      │
-│ 5. Community Summary     → Generate summaries        │
-└──────────────────────────────────────────────────────┘
-   │
-   ▼
-Query: Local Search or Global Search
+```mermaid
+flowchart TD
+    D(["Documents"]) --> S1["1. Entity Extraction<br/>→ Extract named entities"]
+    S1 --> S2["2. Relationship Extraction<br/>→ Extract relations"]
+    S2 --> S3["3. Graph Construction<br/>→ Build knowledge graph"]
+    S3 --> S4["4. Community Detection<br/>→ Discover communities"]
+    S4 --> S5["5. Community Summary<br/>→ Generate summaries"]
+    S5 --> Q(["Query: Local Search or Global Search"])
 ```
 
 #### 1. Entity Extraction（命名实体抽取）
@@ -1099,18 +1103,21 @@ def rag_fusion(original_query: str, llm, retriever, num_variants=4):
 
 当文档包含图表、流程图、产品图片等视觉信息时，纯文本 RAG 会丢失关键信息。
 
-```
-多模态 RAG 架构：
-
-文档集合
-├── 文本内容 → Text Embedding → 文本向量库
-├── 图片/图表 → 两种策略：
-│   ├── 策略 A：VLM 生成图片描述 → Text Embedding → 文本向量库
-│   └── 策略 B：CLIP Embedding → 图片向量库
-└── 表格 → 结构化提取 → Text Embedding → 文本向量库
-
-查询时：
-用户问题 → Text Embedding → 检索文本 + 检索图片描述/图片 → 多模态 LLM 生成答案
+```mermaid
+flowchart LR
+    subgraph Index["多模态 RAG 架构"]
+        DOC(["文档集合"])
+        DOC --> TXT["文本内容"] --> TE1["Text Embedding"] --> TVDB[("文本向量库")]
+        DOC --> IMG["图片/图表<br/>两种策略"]
+        IMG --> SA["策略 A：VLM 生成图片描述"] --> TE2["Text Embedding"] --> TVDB
+        IMG --> SB["策略 B：CLIP Embedding"] --> IVDB[("图片向量库")]
+        DOC --> TBL["表格"] --> EXT["结构化提取"] --> TE3["Text Embedding"] --> TVDB
+    end
+    subgraph Query["查询时"]
+        Q(["用户问题"]) --> QE["Text Embedding"] --> RT["检索文本 + 检索图片描述/图片"] --> MLLM["多模态 LLM 生成答案"]
+    end
+    TVDB --> RT
+    IVDB --> RT
 ```
 
 ```python

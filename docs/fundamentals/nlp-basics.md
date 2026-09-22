@@ -10,13 +10,20 @@ prereqs: [fundamentals/neural-networks]
 
 ## 在大模型体系中的位置
 
-```
-NLP 基础 ◄── 你在这里
-  ├── 文本表示     → Embedding 层是 Transformer 的入口
-  ├── 分词         → Tokenizer 决定模型看到什么
-  ├── 序列建模     → RNN/LSTM 的局限催生了 Transformer
-  ├── Seq2Seq      → Encoder-Decoder 架构和注意力机制的起源
-  └── 语言模型     → Next-token prediction 的理论框架
+```mermaid
+flowchart LR
+    NLP["NLP 基础"]
+    NLP -.- HERE>"★ 你在这里"]
+    NLP --> A["文本表示"]
+    A --> A1["Embedding 层是 Transformer 的入口"]
+    NLP --> B["分词"]
+    B --> B1["Tokenizer 决定模型看到什么"]
+    NLP --> C["序列建模"]
+    C --> C1["RNN/LSTM 的局限催生了 Transformer"]
+    NLP --> D["Seq2Seq"]
+    D --> D1["Encoder-Decoder 架构和注意力机制的起源"]
+    NLP --> E1["语言模型"]
+    E1 --> E2["Next-token prediction 的理论框架"]
 ```
 
 ---
@@ -211,10 +218,15 @@ def decode(vocab_reverse, token_ids):
 ```
 
 **完整的 Tokenizer 流程：**
-```
-原始文本 → 预处理(清洗/规范化) → 分词(pattern matching)
-→ 查词表(encode) → token_ids → 添加特殊 token(<SOS>/<EOS>)
-→ Padding/Truncation → 输入模型
+```mermaid
+flowchart LR
+    A(["原始文本"]) --> B["预处理(清洗/规范化)"]
+    B --> C["分词(pattern matching)"]
+    C --> D["查词表(encode)"]
+    D --> E1["token_ids"]
+    E1 --> F["添加特殊 token(&lt;SOS&gt;/&lt;EOS&gt;)"]
+    F --> G["Padding/Truncation"]
+    G --> H(["输入模型"])
 ```
 
 ---
@@ -296,9 +308,21 @@ $$
 
 Seq2Seq 模型处理**输入序列长度 $\neq$ 输出序列长度**的任务（如翻译）：
 
-```
-Encoder: "我爱你" → h1, h2, h3 → context_vector (最后一个隐状态)
-Decoder: context_vector → "I" → "love" → "you" → <EOS>
+```mermaid
+flowchart LR
+    subgraph ENC["Encoder"]
+        S1(["#quot;我爱你#quot;"]) --> H1["h1, h2, h3"]
+        H1 --> CV["context_vector (最后一个隐状态)"]
+    end
+
+    subgraph DEC["Decoder"]
+        CV2["context_vector"] --> W1["#quot;I#quot;"]
+        W1 --> W2["#quot;love#quot;"]
+        W2 --> W3["#quot;you#quot;"]
+        W3 --> EOS(["&lt;EOS&gt;"])
+    end
+
+    CV --> CV2
 ```
 
 **瓶颈问题：** 整个输入序列被压缩到一个固定长度的 context_vector 中。对于长句子，这个向量无法承载所有信息。

@@ -10,20 +10,18 @@ prereqs: [architecture/transformer]
 
 ## 在大模型体系中的位置
 
-```
-Input Token → Embedding + Positional Encoding
-                ↓
-        ┌────────────────────────┐
-        │  Attention (this page) │  ← Core: lets each token "see" other tokens
-        └────────────────────────┘
-                ↓
-           FFN / MoE                ← Per-token nonlinear transform
-                ↓
-           LayerNorm                ← Stabilize training
-                ↓
-          x N layers
-                ↓
-           Output logits
+```mermaid
+flowchart TD
+    IN(["Input Token"]) --> EMB["Embedding + Positional Encoding"]
+    EMB --> ATT["Attention (this page)"]
+    ATT --> FFN["FFN / MoE"]
+    FFN --> LN["LayerNorm"]
+    LN --> NL["x N layers"]
+    NL --> OUT(["Output logits"])
+
+    ATT -.- NA>"Core: lets each token #quot;see#quot; other tokens"]
+    FFN -.- NB>"Per-token nonlinear transform"]
+    LN -.- NC>"Stabilize training"]
 ```
 
 注意力层决定了"**信息如何在序列内流动**"。模型的上下文理解能力、长距离依赖建模、推理速度和显存消耗，都与注意力机制的设计直接相关。
@@ -1037,6 +1035,12 @@ print(q.shape, k.shape, v.shape)
 | **核心思想** | 多头并行 | KV 共享 | 分组 KV 共享 | 低秩 KV 压缩 | KV 张量积分解 |
 
 > **关键洞察：** MQA/GQA 是在"头数维度"上压缩；MLA 是在"特征维度"上压缩（类似 LoRA 思想）；TPA 是在"投影矩阵"上做 CP 分解——三者从不同角度减少 KV 开销。
+
+::: tip 本章之外：复杂度本身还能不能降？
+上表里所有变体——包括 Flash Attention——都保留了完整的 $QK^\top$ 计算，压缩的是**单个 token 的 KV 表示大小**或 **IO 开销**，复杂度仍是 $O(N^2)$。
+
+2025 年之后，各家开始改结构本身：**减少参与计算的 token 数量**。线性注意力把历史压成固定大小的状态（KV Cache 直接归零），稀疏注意力只对筛选出的 top-k token 做完整 softmax，滑窗则只看局部。这三条路线和它们的取舍，见 [高效注意力：线性、稀疏与混合](efficient-attention.md)。
+:::
 
 ---
 

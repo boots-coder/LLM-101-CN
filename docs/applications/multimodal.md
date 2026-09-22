@@ -23,18 +23,13 @@ ViT 是将 Transformer 应用于视觉领域的里程碑工作。核心思想出
 
 ### ViT 的工作流程
 
-```
-输入图像 (224×224×3)
-    ↓
-切分为 Patch (16×16 = 196个patch)
-    ↓
-每个 Patch 线性投影为向量 (patch embedding, dim=768)
-    ↓
-加上位置编码 + [CLS] token
-    ↓
-送入标准 Transformer Encoder (L=12, H=12)
-    ↓
-[CLS] token 的输出 → 分类头
+```mermaid
+flowchart TD
+    A(["输入图像 (224×224×3)"]) --> B["切分为 Patch (16×16 = 196个patch)"]
+    B --> C["每个 Patch 线性投影为向量 (patch embedding, dim=768)"]
+    C --> D["加上位置编码 + &#91;CLS&#93; token"]
+    D --> E["送入标准 Transformer Encoder (L=12, H=12)"]
+    E --> F(["&#91;CLS&#93; token 的输出 → 分类头"])
 ```
 
 ### Patch Embedding 实现
@@ -122,10 +117,14 @@ CLIP（Contrastive Language-Image Pre-training）是连接视觉和语言的桥�
 
 ### 双编码器架构
 
-```
-图像 ──→ [图像编码器(ViT-L/14)] ──→ 图像特征 ──→ [线性投影] ──→ 图像向量 (d=512) ──┐
-                                                                                  ├→ 余弦相似度矩阵
-文本 ──→ [文本编码器(Transformer)] ──→ [EOS]特征 ──→ [线性投影] ──→ 文本向量 (d=512) ──┘
+```mermaid
+flowchart LR
+    I(["图像"]) --> IE[["图像编码器(ViT-L/14)"]]
+    IE --> IF["图像特征"] --> IP[["线性投影"]] --> IV["图像向量 (d=512)"]
+    T(["文本"]) --> TE[["文本编码器(Transformer)"]]
+    TE --> TF["&#91;EOS&#93;特征"] --> TP[["线性投影"]] --> TV["文本向量 (d=512)"]
+    IV --> S["余弦相似度矩阵"]
+    TV --> S
 ```
 
 关键设计点：
@@ -272,22 +271,21 @@ LLaVA（Large Language and Vision Assistant）是多模态大模型的代表性�
 
 ### LLaVA 架构详解
 
-```
-输入图像 (336×336)
-    ↓
-[CLIP ViT-L/14 @336px 视觉编码器]  ← 冻结，不参与训练
-    ↓
-视觉特征 (576 tokens, 每个 1024-dim)    ← 24×24 = 576 个 patch
-    ↓
-[MLP 投影层: Linear(1024, 4096) → GELU → Linear(4096, 4096)]  ← LLaVA-1.5 使用 2 层 MLP
-    ↓
-视觉 Token (576 个, 每个 4096-dim)      ← 与 LLM 的 hidden_dim 对齐
-    ↓
-[拼接] ← 系统提示 tokens + 视觉 tokens + 用户指令 tokens
-    ↓
-[LLM (Vicuna-7B / Llama-2)]           ← 阶段一冻结，阶段二微调
-    ↓
-文本回答（自回归生成）
+```mermaid
+flowchart TD
+    A(["输入图像 (336×336)"]) --> B[["CLIP ViT-L/14 @336px 视觉编码器"]]
+    B --- BN>"冻结，不参与训练"]
+    B --> C["视觉特征 (576 tokens, 每个 1024-dim)"]
+    C --- CN>"24×24 = 576 个 patch"]
+    C --> D[["MLP 投影层: Linear(1024, 4096) → GELU → Linear(4096, 4096)"]]
+    D --- DN>"LLaVA-1.5 使用 2 层 MLP"]
+    D --> E["视觉 Token (576 个, 每个 4096-dim)"]
+    E --- EN>"与 LLM 的 hidden_dim 对齐"]
+    E --> F["拼接"]
+    F --- FN>"系统提示 tokens + 视觉 tokens + 用户指令 tokens"]
+    F --> G[["LLM (Vicuna-7B / Llama-2)"]]
+    G --- GN>"阶段一冻结，阶段二微调"]
+    G --> H(["文本回答（自回归生成）"])
 ```
 
 **投影层的演进**：
@@ -534,10 +532,11 @@ Token Compression KV 缓存阶段做 Top-K 视觉 token      Video-LLaMA-2/Long-
 
 [Video-LLaVA](https://github.com/PKU-YuanGroup/Video-LLaVA) 的核心观察：图像和视频应该共享同一个对齐空间，否则模型在切换模态时会出现「割裂」。它使用 [LanguageBind](https://github.com/PKU-YuanGroup/LanguageBind) 做联合编码，把图像和视频都映射到与语言对齐的特征空间，然后接同一套投影层与 LLM。
 
-```
-图像 ──┐
-       ├→ LanguageBind Encoder ─→ 统一特征 ─→ MLP Projector ─→ LLM
-视频 ──┘     (image / video / audio)
+```mermaid
+flowchart LR
+    I(["图像"]) --> LB[["LanguageBind Encoder<br/>(image / video / audio)"]]
+    V(["视频"]) --> LB
+    LB --> U["统一特征"] --> MP["MLP Projector"] --> LLM["LLM"]
 ```
 
 这种设计让模型在同一次训练中能处理图像问答、视频问答，避免了「先训图像 → 再训视频」常见的灾难性遗忘。
@@ -573,15 +572,15 @@ def temporal_token_merge(frame_tokens, merge_ratio=0.5):
 
 对于 1+ 小时的长视频（如电影、监控、教学视频），单次喂入显然不可能。常用 **Hierarchical Caption + Retrieval**：
 
-```
-长视频 (60 min)
-    ↓ 切片为 30s 片段
-[片段 1] [片段 2] ... [片段 N]   ← 每个片段用 Video-LLM 生成 caption
-    ↓
-片段 captions（文本）+ 片段 visual embedding（向量）
-    ↓ 建立时序索引
-        ↓
-用户问题 → 检索最相关 K 个片段 → 把片段 visual + caption 送给最终 LLM 回答
+```mermaid
+flowchart TD
+    A(["长视频 (60 min)"]) -->|切片为 30s 片段| B["&#91;片段 1&#93; &#91;片段 2&#93; ... &#91;片段 N&#93;"]
+    B --- BN>"每个片段用 Video-LLM 生成 caption"]
+    B --> C["片段 captions（文本）+ 片段 visual embedding（向量）"]
+    C -->|建立时序索引| D[("时序索引")]
+    Q(["用户问题"]) --> R["检索最相关 K 个片段"]
+    D --> R
+    R --> L["把片段 visual + caption 送给最终 LLM 回答"]
 ```
 
 这个结构跟 RAG 几乎同构，只是「文档块」换成了「视频片段」。
@@ -597,22 +596,21 @@ def temporal_token_merge(frame_tokens, merge_ratio=0.5):
 
 [Qwen-Audio](https://github.com/QwenLM/Qwen-Audio) 借用了 [Whisper](https://github.com/openai/whisper) 的音频编码器作为「视觉编码器的等价物」，然后接 Qwen LLM：
 
-```
-音频波形 (16 kHz)
-    ↓
-Mel Spectrogram (80 mel bins, 100Hz)         ← 标准 Whisper 预处理
-    ↓
-[Whisper Encoder]                              ← 冻结，提取音频特征
-    ↓
-音频特征 (T, 1280)                             ← T = 帧数
-    ↓
-[Adapter / 下采样 + Linear]                    ← 类似 LLaVA 的投影层
-    ↓
-音频 Token (T', 4096)                          ← 与 LLM hidden 对齐
-    ↓
-[Qwen LLM] ← 拼接「文本指令 + 音频 token」
-    ↓
-文本回答（ASR / 翻译 / 音频问答 / 情绪识别）
+```mermaid
+flowchart TD
+    A(["音频波形 (16 kHz)"]) --> B["Mel Spectrogram (80 mel bins, 100Hz)"]
+    B --- BN>"标准 Whisper 预处理"]
+    B --> C[["Whisper Encoder"]]
+    C --- CN>"冻结，提取音频特征"]
+    C --> D["音频特征 (T, 1280)"]
+    D --- DN>"T = 帧数"]
+    D --> E[["Adapter / 下采样 + Linear"]]
+    E --- EN>"类似 LLaVA 的投影层"]
+    E --> F["音频 Token (T', 4096)"]
+    F --- FN>"与 LLM hidden 对齐"]
+    F --> G[["Qwen LLM"]]
+    G --- GN>"拼接「文本指令 + 音频 token」"]
+    G --> H(["文本回答（ASR / 翻译 / 音频问答 / 情绪识别）"])
 ```
 
 Qwen-Audio 的多任务设计：训练时用 **task tag** 显式告知模型当前任务（如 `<|asr|>`、`<|translation|>`、`<|sound|>`），共用同一套权重处理 30+ 种音频任务。
@@ -621,18 +619,22 @@ Qwen-Audio 的多任务设计：训练时用 **task tag** 显式告知模型当�
 
 GPT-4o 之所以能做到 **<300ms 端到端语音对话**，关键是绕过了「ASR → LLM → TTS」三段式管线：
 
-```
-传统三段式：               原生语音：
-─────────────────         ─────────────────
-音频 → ASR (Whisper)       音频 → audio tokenizer
-   → 文本                       → audio token
-   → LLM 推理                   ↓
-   → 文本                  Unified Transformer
-   → TTS                        (text + audio token 共享词表)
-   → 音频                       ↓
-                          → audio token
-延迟：~2 秒                     → audio detokenizer (Encodec)
-                          延迟：~300ms
+```mermaid
+flowchart TD
+    subgraph Pipe["传统三段式"]
+        direction TB
+        P1(["音频"]) --> P2["ASR (Whisper)"] --> P3["文本"]
+        P3 --> P4["LLM 推理"] --> P5["文本"]
+        P5 --> P6["TTS"] --> P7(["音频"])
+        P7 --- PL>"延迟：~2 秒"]
+    end
+    subgraph Native["原生语音"]
+        direction TB
+        N1(["音频"]) --> N2["audio tokenizer"] --> N3["audio token"]
+        N3 --> N4["Unified Transformer<br/>(text + audio token 共享词表)"]
+        N4 --> N5["audio token"] --> N6["audio detokenizer (Encodec)"]
+        N6 --- NL>"延迟：~300ms"]
+    end
 ```
 
 开源对应实现：[Mini-Omni](https://github.com/gpt-omni/mini-omni)、[LLaMA-Omni](https://github.com/ictnlp/LLaMA-Omni)、[Moshi](https://github.com/kyutai-labs/moshi) 等。
@@ -645,22 +647,16 @@ GUI Agent 是 2024-2026 最热门的 Agent 方向 —— 它需要 **视觉感�
 
 [OmniParser](https://github.com/microsoft/OmniParser) 的设计是 **不依赖 OS-level 可访问性 API**，纯靠视觉解析任意屏幕：
 
-```
-屏幕截图 (任意分辨率)
-    ↓
-[1. 可交互区域检测]           ← YOLOv8 微调，识别按钮/输入框/链接的 bbox
-    ↓
-[2. 图标语义标签]             ← BLIP-2 / Florence 给每个 bbox 生成功能描述
-    ↓
-[3. OCR 文本提取]             ← PaddleOCR 提取屏幕上的所有文字
-    ↓
-结构化 DOM-like 表示：
-  [{"id": 1, "type": "button", "bbox": [x, y, w, h],
-    "label": "Send Email", "ocr_text": "Send"},
-   {"id": 2, "type": "input", "bbox": [...],
-    "label": "Search box", "ocr_text": ""}]
-    ↓
-LLM 接收这个结构化列表 + 用户指令，输出 "click on element id=1"
+```mermaid
+flowchart TD
+    A(["屏幕截图 (任意分辨率)"]) --> S1[["1. 可交互区域检测"]]
+    S1 --- N1>"YOLOv8 微调，识别按钮/输入框/链接的 bbox"]
+    S1 --> S2[["2. 图标语义标签"]]
+    S2 --- N2>"BLIP-2 / Florence 给每个 bbox 生成功能描述"]
+    S2 --> S3[["3. OCR 文本提取"]]
+    S3 --- N3>"PaddleOCR 提取屏幕上的所有文字"]
+    S3 --> D["结构化 DOM-like 表示：<br/>&#91;{&quot;id&quot;: 1, &quot;type&quot;: &quot;button&quot;, &quot;bbox&quot;: &#91;x, y, w, h&#93;,<br/>&quot;label&quot;: &quot;Send Email&quot;, &quot;ocr_text&quot;: &quot;Send&quot;},<br/>{&quot;id&quot;: 2, &quot;type&quot;: &quot;input&quot;, &quot;bbox&quot;: &#91;...&#93;,<br/>&quot;label&quot;: &quot;Search box&quot;, &quot;ocr_text&quot;: &quot;&quot;}&#93;"]
+    D --> L(["LLM 接收这个结构化列表 + 用户指令，输出 &quot;click on element id=1&quot;"])
 ```
 
 ::: tip 为什么不直接给 LLM 看截图？

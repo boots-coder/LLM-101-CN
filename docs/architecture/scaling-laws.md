@@ -10,12 +10,18 @@ prereqs: [architecture/transformer, training/pretraining]
 
 ## 在大模型体系中的位置
 
-```
-Scaling Laws ◄── 你在这里
-  ├── 指导模型大小选择     → 7B vs 13B vs 70B 怎么选
-  ├── 指导数据量规划       → 需要多少 token 的训练数据
-  ├── 指导计算预算分配     → 买多少 GPU、训多少步
-  └── 解释涌现能力         → 为什么大模型会"突然变聪明"
+```mermaid
+flowchart LR
+    SL["Scaling Laws"]
+    SL -.- HERE>"★ 你在这里"]
+    SL --> A["指导模型大小选择"]
+    A --> A1["7B vs 13B vs 70B 怎么选"]
+    SL --> B["指导数据量规划"]
+    B --> B1["需要多少 token 的训练数据"]
+    SL --> C["指导计算预算分配"]
+    C --> C1["买多少 GPU、训多少步"]
+    SL --> D["解释涌现能力"]
+    D --> D1["为什么大模型会#quot;突然变聪明#quot;"]
 ```
 
 在决定训练一个新模型之前，Scaling Laws 是最重要的参考框架。它让模型训练从"凭经验试"变成了"可预测、可规划"。

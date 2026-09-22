@@ -26,20 +26,19 @@ Transformer 发表于 2017 年的论文 *"Attention Is All You Need"*，是大�
 
 Transformer 的原始设计是一个 **Encoder-Decoder** 架构，数据流如下：
 
-```
-输入序列 (src_ids)
-    ↓
-[Embedding + Positional Encoding]  ← 输入层：词嵌入 + 位置编码
-    ↓
-[Encoder × N 层]                   ← 每层包含：多头自注意力 + FFN + 残差 + LayerNorm
-    ↓
-编码表征 (X_src)
-    ↓                              ↓
-[Decoder × N 层]                   ← 每层包含：掩码自注意力 + 交叉注意力 + FFN
-    ↓
-[Output Layer (Linear + Softmax)]  ← 输出层：映射到目标词表
-    ↓
-输出概率分布
+```mermaid
+flowchart TD
+    A(["输入序列 (src_ids)"]) --> B["Embedding + Positional Encoding"]
+    B --> C["Encoder × N 层"]
+    C --> D["编码表征 (X_src)"]
+    D --> E1["Decoder × N 层"]
+    E1 --> F["Output Layer (Linear + Softmax)"]
+    F --> G(["输出概率分布"])
+
+    B -.- NB>"输入层：词嵌入 + 位置编码"]
+    C -.- NC>"每层包含：多头自注意力 + FFN + 残差 + LayerNorm"]
+    E1 -.- NE>"每层包含：掩码自注意力 + 交叉注意力 + FFN"]
+    F -.- NF>"输出层：映射到目标词表"]
 ```
 
 **Encoder** 接收源序列，通过 N 层堆叠的 EncoderBlock 提取上下文表征。每个 EncoderBlock 包含两个子层：(1) 多头自注意力，(2) 前馈神经网络，每个子层都有残差连接和 LayerNorm。

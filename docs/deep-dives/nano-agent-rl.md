@@ -36,26 +36,16 @@ Agent-RL 的本质区别在于 rollout 的形状：
 
 ## 一图看清整体架构
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                       AgentRLTrainer                        │
-│                                                             │
-│   ┌────────────┐   ┌─────────────┐   ┌────────────────┐    │
-│   │  Policy    │──▶│  Rollout    │──▶│  Reward + Mask │    │
-│   │  (πθ)      │   │  (multi-    │   │  Construction  │    │
-│   │            │   │   turn)     │   │                │    │
-│   └─────▲──────┘   └──────┬──────┘   └────────┬───────┘    │
-│         │                 │                   │            │
-│         │          ┌──────▼──────┐            │            │
-│         │          │  ToolEnv    │            │            │
-│         │          │ (calculator)│            │            │
-│         │          └─────────────┘            │            │
-│         │                                     │            │
-│         │     ┌───────────────────────────────▼─────┐      │
-│         └─────│  GRPO Update                        │      │
-│               │  (group z-score → clipped surrogate)│      │
-│               └─────────────────────────────────────┘      │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph TR["AgentRLTrainer"]
+        direction TB
+        PO["Policy<br/>(πθ)"] --> RO["Rollout<br/>(multi-turn)"]
+        RO --> RW["Reward + Mask<br/>Construction"]
+        RO --> TE["ToolEnv<br/>(calculator)"]
+        RW --> GU["GRPO Update<br/>(group z-score → clipped surrogate)"]
+        GU --> PO
+    end
 ```
 
 四个组件，对应下面四节。

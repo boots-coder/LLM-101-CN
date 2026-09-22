@@ -19,32 +19,16 @@ prereqs: [architecture/transformer, architecture/attention, fundamentals/neural-
 
 ## 模型架构总览
 
-```
-Input Token IDs: [batch_size, seq_len]
-       │
-       ▼
-┌─────────────────┐
-│ Token Embedding  │  wte: [vocab_size, d_model]
-│ + Pos Embedding  │  wpe: [max_seq_len, d_model]
-└────────┬────────┘
-         │
-    ┌────▼────┐
-    │ Block 1 │ ─── LayerNorm → CausalSelfAttn → LayerNorm → FFN
-    ├─────────┤
-    │ Block 2 │
-    ├─────────┤
-    │  ...    │
-    ├─────────┤
-    │ Block N │
-    └────┬────┘
-         │
-    ┌────▼────────┐
-    │ LayerNorm   │
-    │ LM Head     │  [d_model → vocab_size]（与 wte 共享权重）
-    └─────────────┘
-         │
-         ▼
-  logits: [batch_size, seq_len, vocab_size]
+```mermaid
+flowchart TD
+    IN(["Input Token IDs: [batch_size, seq_len]"]) --> EMB["Token Embedding<br/>+ Pos Embedding<br/>wte: [vocab_size, d_model]<br/>wpe: [max_seq_len, d_model]"]
+    EMB --> B1["Block 1"]
+    B1 --> B2["Block 2"]
+    B2 --> BD["..."]
+    BD --> BN["Block N"]
+    NB>"LayerNorm → CausalSelfAttn → LayerNorm → FFN"] -.- B1
+    BN --> HD["LayerNorm<br/>LM Head<br/>[d_model → vocab_size]（与 wte 共享权重）"]
+    HD --> OUT(["logits: [batch_size, seq_len, vocab_size]"])
 ```
 
 ---

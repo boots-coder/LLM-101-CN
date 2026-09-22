@@ -73,10 +73,11 @@ nano-vllm 的文件结构一目了然：
 
 每一条推理请求在引擎内部被封装为一个 `Sequence` 对象。先看状态机：
 
-```
-WAITING ──allocate──> RUNNING ──EOS/max_tokens──> FINISHED
-   ^                    |
-   +----preempt--------+
+```mermaid
+flowchart LR
+    W(["WAITING"]) -->|"allocate"| R["RUNNING"]
+    R -->|"EOS/max_tokens"| F(["FINISHED"])
+    R -->|"preempt"| W
 ```
 
 ::: tip 关键概念

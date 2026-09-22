@@ -10,12 +10,13 @@ prereqs: [training/alignment]
 
 ## 在大模型体系中的位置
 
-```
-Training Pipeline
-  ├── Pretraining       → 模型"知道什么"
-  ├── SFT               → 模型"怎么说话"
-  ├── RLHF/DPO          → 模型"说得多好"（基础对齐）
-  └── Advanced Alignment ◄── 你在这里：模型"如何安全可靠地服务"
+```mermaid
+flowchart TD
+    TP(["Training Pipeline"]) --> A["Pretraining<br/>模型#quot;知道什么#quot;"]
+    TP --> B["SFT<br/>模型#quot;怎么说话#quot;"]
+    TP --> C["RLHF/DPO<br/>模型#quot;说得多好#quot;（基础对齐）"]
+    TP --> D["Advanced Alignment<br/>模型#quot;如何安全可靠地服务#quot;"]
+    HERE>"★ 你在这里"] --- D
 ```
 
 基础对齐（alignment.md）教你**怎么训练**；本章教你**训练时要考虑什么**——这些问题决定了模型能否从实验室安全地走向生产。
@@ -239,14 +240,11 @@ $$
 
 让两个 AI 互相辩论，人类只需要判断辩论中的论点是否合理（比直接判断答案容易得多）。
 
-```
-Judge (Human)
-    ↑
-    │ 判断论点
-    │
-AI-A ←──辩论──→ AI-B
-    │               │
-    └── 各自论证 ──┘
+```mermaid
+flowchart TD
+    A["AI-A"] <-->|辩论| B["AI-B"]
+    A -->|各自论证| J["Judge (Human)<br/>判断论点"]
+    B -->|各自论证| J
 ```
 
 **2. 递归奖励建模（Recursive Reward Modeling）**

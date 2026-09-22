@@ -10,16 +10,15 @@ prereqs: [training/sft]
 
 ## 在大模型体系中的位置
 
-```
-预训练 (Pre-training)          → 学习语言知识和世界知识
-    ↓
-监督微调 (SFT)                 → 学习指令跟随能力
-    ↓
-偏好对齐  ← 你在这里            → 学习人类偏好，安全有用
-  ├── RLHF (PPO)               → 经典方案：奖励模型 + 强化学习
-  ├── DPO                      → 无需奖励模型，直接偏好优化
-  ├── GRPO                     → DeepSeek 方案：组内相对排名
-  └── KTO                      → 无需成对数据，前景理论启发
+```mermaid
+flowchart TD
+    A["预训练 (Pre-training)<br/>学习语言知识和世界知识"] --> B["监督微调 (SFT)<br/>学习指令跟随能力"]
+    B --> C["偏好对齐<br/>学习人类偏好，安全有用"]
+    HERE>"★ 你在这里"] --- C
+    C --> D1["RLHF (PPO)<br/>经典方案：奖励模型 + 强化学习"]
+    C --> D2["DPO<br/>无需奖励模型，直接偏好优化"]
+    C --> D3["GRPO<br/>DeepSeek 方案：组内相对排名"]
+    C --> D4["KTO<br/>无需成对数据，前景理论启发"]
 ```
 
 SFT 后的模型能遵循指令，但可能生成有害、不准确或低质量的回答。偏好对齐通过人类反馈引导模型学习"什么样的回答更好"，使模型既 **有用 (helpful)** 又 **安全 (harmless)**。
@@ -28,12 +27,10 @@ SFT 后的模型能遵循指令，但可能生成有害、不准确或低质量�
 
 RLHF (Reinforcement Learning from Human Feedback) 是 ChatGPT 成功的关键技术，完整 pipeline 包括三个阶段：
 
-```
-阶段一：SFT 训练       → 得到 SFT 模型 (π_sft)
-    ↓
-阶段二：训练 Reward Model → 学习人类偏好打分
-    ↓
-阶段三：PPO 优化        → 用 RL 最大化奖励，同时不偏离 SFT 模型太远
+```mermaid
+flowchart TD
+    A["阶段一：SFT 训练<br/>得到 SFT 模型 (π_sft)"] --> B["阶段二：训练 Reward Model<br/>学习人类偏好打分"]
+    B --> C["阶段三：PPO 优化<br/>用 RL 最大化奖励，同时不偏离 SFT 模型太远"]
 ```
 
 ### Bradley-Terry 偏好模型
@@ -1674,12 +1671,13 @@ $$
 
 **Heart-in-the-Loop 多轮闭环**（page 4 §2.2）：
 
-```
-seed s_i ──► [agent π_θ] y_t ──► [Sentient Agent S]
-                ▲                       │
-                │                       ├── e_t  （可验证情感分）
-                │                       └── x_t  （用户下一句）
-                └────── h_{t-1} ◄───────┘
+```mermaid
+flowchart LR
+    SEED(["seed s_i"]) --> AG["agent π_θ"]
+    AG -->|"y_t"| SA["Sentient Agent S"]
+    SA --> ET["e_t （可验证情感分）"]
+    SA --> XT["x_t （用户下一句）"]
+    SA -->|"h_{t-1}"| AG
 ```
 
 每步 $t$ agent 观察历史 $h_{t-1}$ 采样 $y_t \sim \pi_\theta(\cdot \mid h_{t-1})$，simulator 输出 $(e_t, x_t)$。**若 $e_t \le 0$ 则提前终止，视为 social alignment failure**（page 4），最终 $e_T$ 作为 RL 奖励。
@@ -1703,20 +1701,19 @@ seed s_i ──► [agent π_θ] y_t ──► [Sentient Agent S]
 | 追求最高质量，有充足资源 | **PPO** | 最灵活但最复杂 |
 | 需要过程监督（数学/推理） | **PRM + RL** | 步级奖励更精确 |
 
-```
-选择决策流程：
-
-有成对偏好数据？
-├── 是 → 需要同时做 SFT？
-│       ├── 是 → ORPO
-│       └── 否 → 有在线生成能力？
-│               ├── 是 → Online DPO / PPO
-│               └── 否 → DPO
-└── 否 → 有规则可定义的奖励？
-        ├── 是 → GRPO
-        └── 否 → 有好/坏标签？
-                ├── 是 → KTO
-                └── 否 → 先收集数据 😅
+```mermaid
+flowchart TD
+    START(["选择决策流程"]) --> Q0{"有成对偏好数据？"}
+    Q0 -->|是| Q1{"需要同时做 SFT？"}
+    Q1 -->|是| ORPO["ORPO"]
+    Q1 -->|否| Q2{"有在线生成能力？"}
+    Q2 -->|是| ODPO["Online DPO / PPO"]
+    Q2 -->|否| DPO["DPO"]
+    Q0 -->|否| Q3{"有规则可定义的奖励？"}
+    Q3 -->|是| GRPO["GRPO"]
+    Q3 -->|否| Q4{"有好/坏标签？"}
+    Q4 -->|是| KTO["KTO"]
+    Q4 -->|否| COLLECT["先收集数据 😅"]
 ```
 
 ::: tip 实践建议

@@ -15,22 +15,16 @@ prereqs: [training/pretraining, training/alignment, training/agent-rl]
 
 ## K2 一图概览
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                           Kimi K2 (2025-07)                        │
-│                                                                    │
-│  Pre-train ─── 1.04T 参数 / 32.6B 激活 / 384 experts (8 active)    │
-│             │  64 attention heads / MLA / 61 layers                │
-│             │  15.5T tokens / 4k→32k→128k (YaRN)                   │
-│             │  MuonClip (Muon + QK-Clip) → 零 loss spike           │
-│             │                                                      │
-│  Post-train ── SFT (Muon 微调) + Agentic Data Synthesis            │
-│             │  3000+ MCP tools + 20000+ synthetic tools            │
-│             │                                                      │
-│  RL ────────── K1.5-style + Self-Critique Rubric Reward            │
-│             │  Budget Control + PTX Loss + Temperature Decay       │
-│             │  Checkpoint Engine：1T 参数全集群广播 < 30s          │
-└────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph K2["Kimi K2 (2025-07)"]
+        direction TB
+        Pre["Pre-train<br/>1.04T 参数 / 32.6B 激活 / 384 experts (8 active)<br/>64 attention heads / MLA / 61 layers<br/>15.5T tokens / 4k→32k→128k (YaRN)<br/>MuonClip (Muon + QK-Clip) → 零 loss spike"]
+        Post["Post-train<br/>SFT (Muon 微调) + Agentic Data Synthesis<br/>3000+ MCP tools + 20000+ synthetic tools"]
+        RL["RL<br/>K1.5-style + Self-Critique Rubric Reward<br/>Budget Control + PTX Loss + Temperature Decay<br/>Checkpoint Engine：1T 参数全集群广播 &lt; 30s"]
+        Pre --> Post
+        Post --> RL
+    end
 ```
 
 | 维度 | K2 数值 | 出处 |
@@ -248,31 +242,27 @@ K2 = "**更稀疏 + 更窄 attention + 不分组的 expert 池**" 的 V3。Spars
 
 K2 后训练阶段最大的工程量在 agentic 数据合成。Figure 8 (p.10) 展示了三阶段流水线：
 
-```
-        ┌───────────────┐
-        │   Domains     │ (financial trading / software / robot control / ...)
-        └───────┬───────┘
-                ↓
-        ┌───────────────────────────────┐
-        │   Tool Repository             │
-        │   ┌────────────┐ ┌──────────┐ │
-        │   │ MCP tools  │ │synthetic │ │
-        │   │  (3000+)   │ │  (20000+)│ │
-        │   └────────────┘ └──────────┘ │
-        └───────┬───────────────────────┘
-                ↓
-        ┌──────────────┐    ┌──────────────┐
-        │   Agents     │───▶│ Tasks (rubrics)│
-        └──────┬───────┘    └──────┬───────┘
-               ↓                   ↓
-        ┌──────────────────────────────┐
-        │ Multi-turn Trajectory Gen    │
-        │  User Sim ↔ Agent ↔ Tools    │
-        │           ↓                  │
-        │     Judge Agent (rubric)     │
-        │           ↓                  │
-        │      Filtered Data           │
-        └──────────────────────────────┘
+```mermaid
+flowchart TD
+    DM["Domains<br/>(financial trading / software / robot control / ...)"]
+    DM --> TR
+    subgraph TR["Tool Repository"]
+        direction LR
+        MCP["MCP tools<br/>(3000+)"]
+        SYN["synthetic<br/>(20000+)"]
+    end
+    TR --> AG["Agents"]
+    AG --> TK["Tasks (rubrics)"]
+    AG --> GEN
+    TK --> GEN
+    subgraph GEN["Multi-turn Trajectory Gen"]
+        direction TB
+        SIM["User Sim ↔ Agent ↔ Tools"]
+        JDG["Judge Agent (rubric)"]
+        FLT[("Filtered Data")]
+        SIM --> JDG
+        JDG --> FLT
+    end
 ```
 
 ### 三个阶段 (p.9-10)
@@ -372,10 +362,11 @@ RL 经常让模型回答越来越长。K2 在每个 prompt 上**强制 per-sampl
 
 K2 的 RL 用 **colocated 训推架构** (p.13)：训练 engine 与 inference engine 跑在同一批 worker 上，轮流占用 GPU。每次 iteration：
 
-```
-inference 生成 rollouts → 训练 engine 用 rollouts 更新 → 把新参数推给 inference
-                                                         ↑
-                                                  这一步是瓶颈
+```mermaid
+flowchart LR
+    A["inference 生成 rollouts"] --> B["训练 engine 用 rollouts 更新"]
+    B --> C["把新参数推给 inference"]
+    N1>"这一步是瓶颈"] -.- C
 ```
 
 对 1T 参数模型，常见方案有两类，都不顺手：
@@ -387,17 +378,14 @@ inference 生成 rollouts → 训练 engine 用 rollouts 更新 → 把新参数
 
 K2 在每个训练节点 colocate 一个 **checkpoint engine worker**，三步完成参数同步 (Figure 10, p.14)：
 
-```
-┌──────────────────────── pod ────────────────────────┐
-│  ┌──────────┐    ┌────────────┐    ┌────────────┐  │
-│  │  train   │───▶│  ckpt      │───▶│ inference  │  │
-│  │  engine  │    │  engine    │    │  engine    │  │
-│  └──────────┘    └─────┬──────┘    └────────────┘  │
-│                        │                            │
-│                        ▼                            │
-│                   broadcast                         │
-│                   (across pod)                      │
-└─────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph POD["pod"]
+        direction TB
+        TE["train<br/>engine"] --> CE["ckpt<br/>engine"]
+        CE --> IE["inference<br/>engine"]
+        CE --> BC["broadcast<br/>(across pod)"]
+    end
 ```
 
 1. 每个 ckpt worker 从同 pod 的训练 engine **拉一份参数 local copy**。

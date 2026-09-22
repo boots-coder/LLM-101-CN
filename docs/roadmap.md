@@ -7,19 +7,12 @@
 整个教程预计需要 **8-12 周**（每周投入 10-15 小时）。你可以根据自身背景跳过已熟悉的模块。
 
 ```mermaid
-graph TD
+flowchart TD
     A[第一阶段：基础知识<br/>2-3 周] --> B[第二阶段：模型架构<br/>2-3 周]
     B --> C[第三阶段：训练<br/>1-2 周]
     B --> F[第五阶段：深度剖析<br/>持续进行]
     C --> D[第四阶段：工程化<br/>1-2 周]
     D --> E[第六阶段：应用<br/>1-2 周]
-
-    style A fill:#e8f5e9,stroke:#43a047
-    style B fill:#fff3e0,stroke:#f57f17
-    style C fill:#e3f2fd,stroke:#1976d2
-    style D fill:#fce4ec,stroke:#c62828
-    style E fill:#f3e5f5,stroke:#7b1fa2
-    style F fill:#e0f2f1,stroke:#00796b
 ```
 
 ---

@@ -12,20 +12,23 @@ Flow Matching 是一种比 Diffusion 更简洁的生成式建模方法——不�
 
 ## 在大模型体系中的位置
 
-```
-┌────────────────────────────────────────────────────────────┐
-│              Generative Models for AI                       │
-│                                                             │
-│  VAE ──→ GAN ──→ Diffusion ──→ [Flow Matching] ──→ ???     │
-│                      ↑               ↑                      │
-│               加噪+去噪         直接学 ODE 向量场            │
-│              (复杂 schedule)    (线性插值，更简洁)            │
-│                                                             │
-│  应用: 图像生成 (Stable Diffusion 3)                         │
-│        语音合成 (Voicebox)                                   │
-│        蛋白质结构 (FrameFlow)                                │
-│        LLM 文本生成 (MDLM, Flow Matching for Discrete Data) │
-└────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph GEN["Generative Models for AI"]
+        VAE["VAE"] --> GAN["GAN"]
+        GAN --> DIFF["Diffusion"]
+        DIFF --> FM["Flow Matching"]
+        FM --> NEXT["???"]
+        DIFF -.- ND>"加噪+去噪<br/>(复杂 schedule)"]
+        FM -.- NF>"直接学 ODE 向量场<br/>(线性插值，更简洁)"]
+    end
+
+    subgraph APP["应用"]
+        A1["图像生成 (Stable Diffusion 3)"]
+        A2["语音合成 (Voicebox)"]
+        A3["蛋白质结构 (FrameFlow)"]
+        A4["LLM 文本生成 (MDLM, Flow Matching for Discrete Data)"]
+    end
 ```
 
 Flow Matching 正在成为 Diffusion 的下一代替代方案。Stable Diffusion 3、Meta 的 Voicebox 等都已采用 Flow Matching。更重要的是，它正在被探索用于**离散 token 的生成**，可能为 LLM 带来全新的生成范式。
@@ -38,12 +41,20 @@ Flow Matching 正在成为 Diffusion 的下一代替代方案。Stable Diffusion
 
 Diffusion Model 的核心思路：
 
-```
-前向过程（加噪）:  x_0 → x_1 → x_2 → ... → x_T ≈ N(0, I)
-                   数据      逐步加噪           纯噪声
+```mermaid
+flowchart LR
+    subgraph FWD["前向过程（加噪）"]
+        F0["x_0<br/>数据"] -->|逐步加噪| F1["x_1"]
+        F1 --> F2["x_2"]
+        F2 --> FD["..."]
+        FD --> FT["x_T ≈ N(0, I)<br/>纯噪声"]
+    end
 
-反向过程（去噪）:  x_T → x_{T-1} → ... → x_0
-                   噪声     逐步去噪         生成数据
+    subgraph BWD["反向过程（去噪）"]
+        B0["x_T<br/>噪声"] -->|逐步去噪| B1["x_{T-1}"]
+        B1 --> BD["..."]
+        BD --> BT["x_0<br/>生成数据"]
+    end
 ```
 
 **前向过程**（固定，不可学习）：
@@ -77,12 +88,11 @@ Flow Matching 的思路极其简洁：
 
 > **直接学习一个向量场 $v_\theta(x, t)$，使得数据点沿着这个向量场从噪声分布"流"到目标分布。**
 
-```
-Flow Matching:
-
-t=0                                              t=1
-噪声 x_0 ─────────── 沿向量场流动 ──────────────→ 数据 x_1
-  ∼ N(0,I)         dx/dt = v_θ(x_t, t)           ∼ p_data
+```mermaid
+flowchart LR
+    subgraph FM["Flow Matching"]
+        X0["t=0<br/>噪声 x_0<br/>∼ N(0,I)"] -->|"沿向量场流动<br/>dx/dt = v_θ(x_t, t)"| X1["t=1<br/>数据 x_1<br/>∼ p_data"]
+    end
 ```
 
 用 ODE（常微分方程）描述：
@@ -238,11 +248,15 @@ Rectified Flow（Liu et al., 2023）进一步强调了**直线路径**的优越�
 - ODE 求解只需要**很少的步数**（极端情况下一步就够）
 - 采样速度大幅提升
 
-```
-一般 Flow Matching:          Rectified Flow:
+```mermaid
+flowchart LR
+    subgraph GFM["一般 Flow Matching"]
+        G0["x_0"] -->|"曲线<br/>需要很多步"| G1["x_1"]
+    end
 
-x_0 ~~~曲线~~~→ x_1          x_0 ──直线──→ x_1
-    需要很多步                     可能只需 1 步
+    subgraph RF["Rectified Flow"]
+        R0["x_0"] -->|"直线<br/>可能只需 1 步"| R1["x_1"]
+    end
 ```
 
 ### 4.2 Reflow 操作
@@ -420,8 +434,13 @@ with torch.no_grad():
 
 **方向一：嵌入空间 Flow Matching**
 
-```
-离散 token → Embedding 空间（连续）→ Flow Matching → 连续向量 → 最近邻解码 → token
+```mermaid
+flowchart LR
+    A(["离散 token"]) --> B["Embedding 空间（连续）"]
+    B --> C["Flow Matching"]
+    C --> D["连续向量"]
+    D --> E1["最近邻解码"]
+    E1 --> F(["token"])
 ```
 
 代表工作：**MDLM (Masked Diffusion Language Model)**

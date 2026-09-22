@@ -15,10 +15,10 @@ prereqs: [architecture/attention]
 
 推理优化处于大模型工程化的最后一公里：
 
-```
-预训练 → SFT/RLHF → 量化/蒸馏 → 【推理优化】 → 上线服务
-                                      ↑
-                               你在这里
+```mermaid
+flowchart LR
+    A(["预训练"]) --> B["SFT/RLHF"] --> C["量化/蒸馏"] --> D["【推理优化】"] --> E(["上线服务"])
+    HERE>"★ 你在这里"] -.- D
 ```
 
 无论模型训练得多好，如果推理效率低下，用户就会面临高延迟、高成本的困境。推理优化的核心目标是：
@@ -711,18 +711,22 @@ EAGLE-3（腾讯 AngelSlim 开源）的核心创新是：**Draft Model 不再独
 
 EAGLE-3 的 Draft Model 非常轻量（Target Model 参数的 1/8 ~ 1/4），其核心是接收 Target Model 中间层的隐藏状态：
 
-```
-Target Model (70B)               Draft Model (Light)
-┌─────────────┐                  ┌───────────────┐
-│  Layer 0-31 │──hidden_states──→│ Combine Layer  │
-│  Layer 32   │                  │ (Linear Proj)  │
-│  ...        │                  ├───────────────┤
-│  Layer N    │                  │ 2-4 Attn Layers│
-└─────────────┘                  │ (Shared Embed) │
-                                 ├───────────────┤
-                                 │  LM Head       │
-                                 │ (Vocab Pruned) │
-                                 └───────────────┘
+```mermaid
+flowchart LR
+    subgraph TM["Target Model (70B)"]
+        L1["Layer 0-31"]
+        L2["Layer 32"]
+        L3["..."]
+        L4["Layer N"]
+        L1 --- L2 --- L3 --- L4
+    end
+    subgraph DM["Draft Model (Light)"]
+        C1["Combine Layer<br/>(Linear Proj)"]
+        C2["2-4 Attn Layers<br/>(Shared Embed)"]
+        C3["LM Head<br/>(Vocab Pruned)"]
+        C1 --> C2 --> C3
+    end
+    L1 -->|"hidden_states"| C1
 ```
 
 ```python
@@ -802,14 +806,22 @@ def build_vocab_mapping(dataset, draft_vocab_size=8000, target_vocab_size=128256
 
 与线性猜测不同，EAGLE-3 用**树结构**并行生成多条候选路径：
 
-```
-                    [token_0]
-                   /    |    \
-            [top1]   [top2]   [top3]     ← depth 1: 3 个分支
-            / |        |        \
-       [t1] [t2]    [t1]      [t1]       ← depth 2: 扩展
-        |     |       |
-      [t1]  [t1]   [t1]                  ← depth 3: 继续
+```mermaid
+flowchart TD
+    R(["token_0"])
+    R --> P1["top1"]
+    R --> P2["top2"]
+    R --> P3["top3"]
+    D1>"depth 1: 3 个分支"] -.- P1
+    P1 --> A1["t1"]
+    P1 --> A2["t2"]
+    P2 --> A3["t1"]
+    P3 --> A4["t1"]
+    D2>"depth 2: 扩展"] -.- A1
+    A1 --> B1["t1"]
+    A2 --> B2["t1"]
+    A3 --> B3["t1"]
+    D3>"depth 3: 继续"] -.- B1
 ```
 
 ```python
@@ -1061,23 +1073,13 @@ Prefill 是 Compute-bound，Decode 是 Memory-bound，二者对硬件的需求�
 
 PD 分离的基本架构：
 
-```
-                    ┌──────────────────────┐
-                    │      Scheduler       │
-                    │  (Ray Remote Actor)  │
-                    └──────┬───────┬───────┘
-                           │       │
-              ┌────────────▼──┐ ┌──▼────────────┐
-              │ Prefill Node  │ │ Decode Node   │
-              │  (GPU Group)  │ │  (GPU Group)  │
-              └──────┬────────┘ └────┬──────────┘
-                     │               │
-                     └───────┬───────┘
-                             │
-                    ┌────────▼────────┐
-                    │  KV Cache Store │
-                    │  (Distributed)  │
-                    └─────────────────┘
+```mermaid
+flowchart TD
+    S["Scheduler<br/>(Ray Remote Actor)"]
+    S --> P["Prefill Node<br/>(GPU Group)"]
+    S --> D["Decode Node<br/>(GPU Group)"]
+    P --> KV[("KV Cache Store<br/>(Distributed)")]
+    D --> KV
 ```
 
 ### 关键组件职责
@@ -1116,24 +1118,25 @@ vLLM 是目前最流行的开源 LLM 推理引擎，集成了上述几乎所有�
 
 V0 架构采用 **Scheduler + Worker** 的同步执行模式：
 
-```
-┌─────────────────────────────────────────────┐
-│              vLLM V0 Engine                 │
-├─────────────────────────────────────────────┤
-│  Scheduler                                  │
-│  ├── Waiting Queue（等待 Prefill 的请求）     │
-│  ├── Running Queue（正在 Decode 的请求）      │
-│  └── Swapped Queue（被换出到 CPU 的请求）     │
-├─────────────────────────────────────────────┤
-│  Block Manager (PagedAttention 显存管理)     │
-│  ├── PageAllocator（逻辑块→物理块映射）        │
-│  ├── GPU Block Allocator                    │
-│  └── CPU Block Allocator（Swap 用）          │
-├─────────────────────────────────────────────┤
-│  Worker（模型执行）                           │
-│  ├── Model Runner（前向传播）                 │
-│  └── Cache Engine（KV Cache 物理存储）        │
-└─────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph V0["vLLM V0 Engine"]
+        SCH["Scheduler"]
+        SCH --> S1["Waiting Queue（等待 Prefill 的请求）"]
+        SCH --> S2["Running Queue（正在 Decode 的请求）"]
+        SCH --> S3["Swapped Queue（被换出到 CPU 的请求）"]
+
+        BM["Block Manager (PagedAttention 显存管理)"]
+        BM --> B1["PageAllocator（逻辑块→物理块映射）"]
+        BM --> B2["GPU Block Allocator"]
+        BM --> B3["CPU Block Allocator（Swap 用）"]
+
+        WK["Worker（模型执行）"]
+        WK --> W1["Model Runner（前向传播）"]
+        WK --> W2[("Cache Engine（KV Cache 物理存储）")]
+
+        SCH --> BM --> WK
+    end
 ```
 
 V0 的 **KVCachePool** 实现：
@@ -1199,23 +1202,24 @@ class KVCachePool:
 
 V1 的核心改进是**消除 Prefill/Decode 的概念区分**，统一为 Chunked Prefill：
 
-```
-┌──────────────────────────────────────────────────────┐
-│                 vLLM V1 EngineCore                   │
-├──────────────────────────────────────────────────────┤
-│  Scheduler（Chunked Prefill 统一调度）                │
-│  ├── Decode 请求优先并入 batch                        │
-│  ├── Prefill 请求按 token budget 切分                 │
-│  └── 合并为一条序列送入模型                            │
-├──────────────────────────────────────────────────────┤
-│  KVCachePool（分页式 KV Cache）                       │
-│  ├── 按需分配/释放物理页                               │
-│  └── 请求级别的页映射管理                              │
-├──────────────────────────────────────────────────────┤
-│  ModelWrapper（模型执行封装）                          │
-│  ├── PageAttention Prefill Kernel                    │
-│  └── PageAttention Decoding Kernel                   │
-└──────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph V1["vLLM V1 EngineCore"]
+        SCH["Scheduler（Chunked Prefill 统一调度）"]
+        SCH --> S1["Decode 请求优先并入 batch"]
+        SCH --> S2["Prefill 请求按 token budget 切分"]
+        SCH --> S3["合并为一条序列送入模型"]
+
+        POOL[("KVCachePool（分页式 KV Cache）")]
+        POOL --> P1["按需分配/释放物理页"]
+        POOL --> P2["请求级别的页映射管理"]
+
+        MW["ModelWrapper（模型执行封装）"]
+        MW --> M1["PageAttention Prefill Kernel"]
+        MW --> M2["PageAttention Decoding Kernel"]
+
+        SCH --> POOL --> MW
+    end
 ```
 
 **Engine 的 step 函数**（核心主循环）：

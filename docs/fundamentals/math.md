@@ -9,11 +9,16 @@ topics: [linear-algebra, SVD, calculus, gradient, cross-entropy, KL-divergence, 
 
 ## 在大模型体系中的位置
 
-```
-数学基础 ◄── 你在这里
-  ├── 线性代数 → Attention 的矩阵运算、LoRA 低秩分解
-  ├── 微积分   → 反向传播、梯度下降、优化器设计
-  └── 概率论   → Softmax、交叉熵损失、采样策略、KL 散度
+```mermaid
+flowchart LR
+    M["数学基础"]
+    M -.- HERE>"★ 你在这里"]
+    M --> A["线性代数"]
+    A --> A1["Attention 的矩阵运算、LoRA 低秩分解"]
+    M --> B["微积分"]
+    B --> B1["反向传播、梯度下降、优化器设计"]
+    M --> C["概率论"]
+    C --> C1["Softmax、交叉熵损失、采样策略、KL 散度"]
 ```
 
 数学是贯穿整个 LLM 学习路径的底层语言。Transformer 里的每一步计算——Query/Key 内积、Softmax 归一化、残差连接、LayerNorm——都可以用这三个数学分支来解释。

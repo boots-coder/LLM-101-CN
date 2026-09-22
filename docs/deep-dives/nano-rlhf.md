@@ -136,11 +136,12 @@ class RLHFModelBundle:
 ```
 
 ::: warning 四个模型的关系
-```
-SFT 模型 ──→ policy（可训练）      用于生成 + 策略更新
-         ├──→ reference（冻结）   用于计算 KL 散度
-         └──→ reward_fn（冻结）   用于给生成结果打分
-RM 模型  ──→ value_net（可训练）  用于估计状态价值 V(s)
+```mermaid
+flowchart LR
+    SFT(["SFT 模型"]) -->|"用于生成 + 策略更新"| PO["policy（可训练）"]
+    SFT -->|"用于计算 KL 散度"| RF["reference（冻结）"]
+    SFT -->|"用于给生成结果打分"| RW["reward_fn（冻结）"]
+    RM(["RM 模型"]) -->|"用于估计状态价值 V(s)"| VN["value_net（可训练）"]
 ```
 这就是为什么 PPO-RLHF 需要大量显存——至少要加载 4 个模型。
 :::
@@ -343,22 +344,22 @@ def run_rlhf(bundle, args, prompts, gen_len=64):
 ```
 
 ::: warning PPO-RLHF 的训练流程总结
-```
-循环开始
-  │
-  ├─ 1. policy 生成回答            → responses
-  ├─ 2. reward_fn 给回答打分       → rm_scores
-  ├─ 3. reference 算参考 logprobs  → ref_lp
-  ├─ 4. 计算 KL 惩罚后的奖励       → shaped_rewards
-  ├─ 5. value_net 估计状态价值     → v_old
-  │
-  └─ PPO 更新（重复 K 次）
-       ├─ 重新前向传播 policy + value_net
-       ├─ 计算 GAE 优势估计
-       ├─ 计算 Policy Loss（clipped）
-       ├─ 计算 Value Loss（clipped）
-       └─ 反向传播更新 policy + value_net
-循环结束
+```mermaid
+flowchart TD
+    ST(["循环开始"]) --> S1["1. policy 生成回答 → responses"]
+    S1 --> S2["2. reward_fn 给回答打分 → rm_scores"]
+    S2 --> S3["3. reference 算参考 logprobs → ref_lp"]
+    S3 --> S4["4. 计算 KL 惩罚后的奖励 → shaped_rewards"]
+    S4 --> S5["5. value_net 估计状态价值 → v_old"]
+    S5 --> PPO
+    subgraph PPO["PPO 更新（重复 K 次）"]
+        direction TB
+        P1["重新前向传播 policy + value_net"] --> P2["计算 GAE 优势估计"]
+        P2 --> P3["计算 Policy Loss（clipped）"]
+        P3 --> P4["计算 Value Loss（clipped）"]
+        P4 --> P5["反向传播更新 policy + value_net"]
+    end
+    PPO --> FIN(["循环结束"])
 ```
 :::
 
@@ -568,13 +569,15 @@ GRPO 最大的工程优势：**省掉了 Critic 模型，显存需求几乎减�
 
 生产级 PPO 的一个巧妙设计是用 **Multi-Adapter LoRA** 共享基座模型：
 
-```
-基座模型 (冻结)
-  ├── LoRA-Policy   → actor（可训练）
-  ├── LoRA-Ref      → ref（冻结快照）
-  └── LoRA-Value    → critic（可训练）
-  
-RM 单独加载或同样用 LoRA Adapter
+```mermaid
+flowchart LR
+    BASE(["基座模型 (冻结)"]) --> LP["LoRA-Policy"]
+    LP --> AC["actor（可训练）"]
+    BASE --> LRF["LoRA-Ref"]
+    LRF --> RF["ref（冻结快照）"]
+    BASE --> LV["LoRA-Value"]
+    LV --> CR["critic（可训练）"]
+    N1>"RM 单独加载或同样用 LoRA Adapter"] -.- BASE
 ```
 
 这样四个模型共享基座权重，只训练少量 LoRA 参数，显存占用大幅降低。
@@ -615,19 +618,13 @@ config = {
 
 关键洞察：LoRA 微调只改变极少参数（通常 < 0.5%），四个角色可以共享同一个量化基座：
 
-```
-                    ┌────────────────┐
-                    │ 量化基座 (4-bit) │
-                    │    ~3.5 GB      │
-                    └───────┬────────┘
-                            │ 共享
-         ┌──────────┬───────┼────────┬────────────┐
-         ▼          ▼       ▼        ▼            │
-   ┌──────────┐ ┌───────┐ ┌──────┐               │
-   │ LoRA-π   │ │ Value │ │LoRA-r│  Reference    │
-   │ (policy) │ │ Head  │ │(reward)│ = 基座本身   │
-   │  ~20 MB  │ │ ~4 KB │ │~20 MB│  (冻结 LoRA) │
-   └──────────┘ └───────┘ └──────┘               │
+```mermaid
+flowchart TD
+    BASE[("量化基座 (4-bit)<br/>~3.5 GB")]
+    BASE -->|"共享"| LP["LoRA-π (policy)<br/>~20 MB"]
+    BASE -->|"共享"| VH["Value Head<br/>~4 KB"]
+    BASE -->|"共享"| LR1["LoRA-r (reward)<br/>~20 MB"]
+    BASE -->|"共享"| REF["Reference = 基座本身<br/>(冻结 LoRA)"]
 ```
 
 - **Policy**：可训练的 LoRA adapter

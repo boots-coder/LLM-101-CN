@@ -123,9 +123,15 @@ def get_reference(self, doc):
 
 整个评测流程一句话：
 
-```
-prompt → model.generate(n_samples 次) → decode → postprocess(stop sequence)
-       → 拼接 reference → 写入临时目录子进程 exec → ✓/✗ → pass@k
+```mermaid
+flowchart LR
+    A(["prompt"]) --> B["model.generate(n_samples 次)"]
+    B --> C["decode"]
+    C --> D["postprocess(stop sequence)"]
+    D --> E["拼接 reference"]
+    E --> F["写入临时目录子进程 exec"]
+    F --> G{"✓ / ✗"}
+    G --> H(["pass@k"])
 ```
 
 具体到 bigcode 的代码，主控在 `Evaluator.evaluate`：

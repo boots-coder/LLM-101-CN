@@ -10,18 +10,16 @@ prereqs: [training/sft]
 
 ## 在大模型体系中的位置
 
-```
-预训练 (Pre-training)          → 学习语言知识和世界知识
-    ↓
-监督微调 (SFT)                 → 学习指令跟随能力
-    ↓
-偏好对齐 (RLHF/DPO/GRPO)      → 学习人类偏好，安全有用
-    ↓
-模型压缩  ← 你在这里            → 让模型更小、更快、更省
-  ├── 知识蒸馏                  → 大模型教小模型
-  ├── 模型量化                  → 降低数值精度
-  ├── 模型剪枝                  → 去掉冗余参数
-  └── LoRA/适配器               → 参数高效微调
+```mermaid
+flowchart TD
+    A["预训练 (Pre-training)<br/>学习语言知识和世界知识"] --> B["监督微调 (SFT)<br/>学习指令跟随能力"]
+    B --> C["偏好对齐 (RLHF/DPO/GRPO)<br/>学习人类偏好，安全有用"]
+    C --> D["模型压缩<br/>让模型更小、更快、更省"]
+    HERE>"★ 你在这里"] --- D
+    D --> E1["知识蒸馏<br/>大模型教小模型"]
+    D --> E2["模型量化<br/>降低数值精度"]
+    D --> E3["模型剪枝<br/>去掉冗余参数"]
+    D --> E4["LoRA/适配器<br/>参数高效微调"]
 ```
 
 大模型效果好但推理成本高昂。知识蒸馏的核心思想是：**让一个小模型（Student）学习大模型（Teacher）的行为模式，从而在更低的计算成本下获得接近的效果**。
@@ -61,18 +59,14 @@ Teacher 的软标签:
 
 Hinton 等人在 2015 年提出了知识蒸馏的经典框架：
 
-```
-Teacher Model (Large)
-    │
-    +-- Hard Labels ──→ Hard Loss (Standard CE Loss)
-    │                          │
-    +-- Soft Labels ──→ Soft Loss (KL Divergence)
-         (T>1)                 │
-                        ┌──────┴──────┐
-                        │             │
-              alpha x Soft Loss + (1-alpha) x Hard Loss = Total Loss
-                        │
-              Student Model (Small)
+```mermaid
+flowchart TD
+    T["Teacher Model (Large)"]
+    T -->|"Hard Labels"| HL["Hard Loss (Standard CE Loss)"]
+    T -->|"Soft Labels (T>1)"| SL["Soft Loss (KL Divergence)"]
+    HL --> TOTAL["alpha x Soft Loss + (1-alpha) x Hard Loss = Total Loss"]
+    SL --> TOTAL
+    TOTAL --> S["Student Model (Small)"]
 ```
 
 ### Temperature Scaling
@@ -222,16 +216,11 @@ print(f"Distillation Loss: {loss.item():.4f}")
 
 **核心思路**：无法访问 Teacher 的权重和 logits，只能通过 API 获取 Teacher 的文本输出，然后用这些输出作为训练数据对 Student 进行 SFT。
 
-```
-Teacher (闭源大模型，如 GPT-4)
-    │
-    └── API 调用 → 生成高质量回答
-                        │
-                        ↓
-              收集 (prompt, response) 数据
-                        │
-                        ↓
-              Student (开源小模型) 做 SFT
+```mermaid
+flowchart TD
+    T["Teacher (闭源大模型，如 GPT-4)"] -->|"API 调用"| G["生成高质量回答"]
+    G --> DATA[("收集 (prompt, response) 数据")]
+    DATA --> S["Student (开源小模型) 做 SFT"]
 ```
 
 ```python
@@ -337,16 +326,12 @@ $$
 
 高质量的蒸馏数据是成功的关键。完整的数据生成流水线包括：
 
-```
-Seed Tasks（种子任务）
-    ↓
-指令进化（Evol-Instruct）
-    ↓
-Teacher 生成回答
-    ↓
-质量过滤 & 去重
-    ↓
-蒸馏训练数据
+```mermaid
+flowchart TD
+    A(["Seed Tasks（种子任务）"]) --> B["指令进化（Evol-Instruct）"]
+    B --> C["Teacher 生成回答"]
+    C --> D["质量过滤 & 去重"]
+    D --> E[("蒸馏训练数据")]
 ```
 
 ```python
@@ -388,8 +373,11 @@ def build_distillation_dataset(seed_tasks, teacher_api, target_size=50000):
 
 不是一步到位蒸馏到最小模型，而是逐步缩小，每一步的 Student 成为下一步的 Teacher：
 
-```
-Teacher (70B) → 蒸馏 → 中间模型 (30B) → 蒸馏 → Student (7B) → 蒸馏 → 更小模型 (1.5B)
+```mermaid
+flowchart LR
+    A["Teacher (70B)"] -->|蒸馏| B["中间模型 (30B)"]
+    B -->|蒸馏| C["Student (7B)"]
+    C -->|蒸馏| D["更小模型 (1.5B)"]
 ```
 
 优势：每一步压缩比小，信息损失更少。实验表明 70B→7B 直接蒸馏的效果不如 70B→30B→7B 两步蒸馏。
@@ -408,14 +396,11 @@ $$
 
 ### Alpaca：指令数据蒸馏的先驱
 
-```
-175 条人工编写的种子指令
-    ↓
-GPT-3.5 (text-davinci-003) 生成 52K 条指令-回答对
-    ↓
-微调 LLaMA-7B
-    ↓
-Stanford Alpaca（效果接近 text-davinci-003 的 7B 模型）
+```mermaid
+flowchart TD
+    A[("175 条人工编写的种子指令")] --> B["GPT-3.5 (text-davinci-003) 生成 52K 条指令-回答对"]
+    B --> C["微调 LLaMA-7B"]
+    C --> D(["Stanford Alpaca（效果接近 text-davinci-003 的 7B 模型）"])
 ```
 
 Alpaca 的成本分析：
@@ -425,14 +410,11 @@ Alpaca 的成本分析：
 
 ### Vicuna：对话数据蒸馏
 
-```
-ShareGPT 平台上用户与 ChatGPT 的真实对话（70K 条）
-    ↓
-数据清洗 & 格式化
-    ↓
-微调 LLaMA-13B
-    ↓
-Vicuna-13B（GPT-4 评测达到 ChatGPT 的 92% 水平）
+```mermaid
+flowchart TD
+    A[("ShareGPT 平台上用户与 ChatGPT 的真实对话（70K 条）")] --> B["数据清洗 & 格式化"]
+    B --> C["微调 LLaMA-13B"]
+    C --> D(["Vicuna-13B（GPT-4 评测达到 ChatGPT 的 92% 水平）"])
 ```
 
 ### 蒸馏的法律和伦理问题

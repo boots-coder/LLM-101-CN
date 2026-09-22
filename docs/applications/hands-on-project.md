@@ -16,21 +16,20 @@ prereqs: [applications/rag, training/sft]
 
 ### 整体架构
 
-```
-          Offline Stage                         Online Stage
-┌───────────────────────────┐    ┌──────────────────────────────────┐
-│ Documents                 │    │ User Query                       │
-│   ↓                       │    │   ↓                              │
-│ Chunk (split by paragraph)│    │ Embed query                      │
-│   ↓                       │    │   ↓                              │
-│ Embed (sentence-transformers) │ │ FAISS similarity search          │
-│   ↓                       │    │   ↓                              │
-│ Store in FAISS index      │    │ Top-k relevant chunks            │
-└───────────────────────────┘    │   ↓                              │
-                                 │ Prompt = query + context chunks  │
-                                 │   ↓                              │
-                                 │ LLM generates answer             │
-                                 └──────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Offline["Offline Stage"]
+        D(["Documents"]) --> C["Chunk (split by paragraph)"]
+        C --> E["Embed (sentence-transformers)"]
+        E --> S[("Store in FAISS index")]
+    end
+    subgraph Online["Online Stage"]
+        Q(["User Query"]) --> QE["Embed query"]
+        QE --> FS["FAISS similarity search"]
+        FS --> TK["Top-k relevant chunks"]
+        TK --> P["Prompt = query + context chunks"]
+        P --> L["LLM generates answer"]
+    end
 ```
 
 ### 第一步：文档分块

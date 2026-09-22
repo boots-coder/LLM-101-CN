@@ -13,15 +13,15 @@ prereqs: [engineering/quantization]
 
 ## 在大模型体系中的位置
 
-```
-预训练 → SFT/RLHF → 量化/压缩 → 【模型部署】 → 上线服务
-                                      ↑
-                               你在这里
-                     ├── 推理框架选型
-                     ├── 服务化 API
-                     ├── 容器化部署
-                     ├── 性能监控
-                     └── 成本优化
+```mermaid
+flowchart LR
+    A(["预训练"]) --> B["SFT/RLHF"] --> C["量化/压缩"] --> D["【模型部署】"] --> E(["上线服务"])
+    HERE>"★ 你在这里"] -.- D
+    D --> F1["推理框架选型"]
+    D --> F2["服务化 API"]
+    D --> F3["容器化部署"]
+    D --> F4["性能监控"]
+    D --> F5["成本优化"]
 ```
 
 模型部署是大模型从"实验室里能跑"到"生产环境能用"的关键一步。选错部署方案可能导致数倍的成本差距或无法满足延迟要求。
@@ -75,14 +75,15 @@ prereqs: [engineering/quantization]
 
 ### 选型决策树
 
-```
-你的场景是什么？
-├── 本地体验/开发测试 → Ollama（最简单）
-├── 本地部署 + CPU 推理 → llama.cpp
-├── 高并发线上服务
-│   ├── NVIDIA GPU → vLLM（首选）或 TensorRT-LLM（极致性能）
-│   └── HF 生态深度集成 → TGI
-└── 边缘设备 / 移动端 → llama.cpp（GGUF 量化）
+```mermaid
+flowchart TD
+    Q{"你的场景是什么？"}
+    Q -->|"本地体验/开发测试"| A1["Ollama（最简单）"]
+    Q -->|"本地部署 + CPU 推理"| A2["llama.cpp"]
+    Q --> S{"高并发线上服务"}
+    Q -->|"边缘设备 / 移动端"| A5["llama.cpp（GGUF 量化）"]
+    S -->|"NVIDIA GPU"| A3["vLLM（首选）<br/>或 TensorRT-LLM（极致性能）"]
+    S -->|"HF 生态深度集成"| A4["TGI"]
 ```
 
 ---

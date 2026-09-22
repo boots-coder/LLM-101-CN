@@ -12,13 +12,15 @@ Prompt Engineering 是与大模型对话的"编程语言"——通过精心设�
 
 ## 在大模型体系中的位置
 
-```
-大模型应用层
-├── Prompt Engineering（提示工程）◄── 你在这里
-├── RAG（检索增强生成）
-├── Agent（智能体）
-├── Fine-tuning（微调）
-└── 评估与对齐
+```mermaid
+flowchart TD
+    Root["大模型应用层"]
+    Root --> PE["Prompt Engineering（提示工程）"]
+    Root --> RAG["RAG（检索增强生成）"]
+    Root --> AG["Agent（智能体）"]
+    Root --> FT["Fine-tuning（微调）"]
+    Root --> EV["评估与对齐"]
+    PE --- Here>"★ 你在这里"]
 ```
 
 Prompt Engineering 是大模型应用的**最底层能力**。无论是 RAG、Agent 还是 Fine-tuning，最终都要通过精心设计的 Prompt 与模型交互。掌握 Prompt Engineering，就是掌握了与 LLM "对话"的语法和语义。
@@ -31,20 +33,14 @@ Prompt Engineering 是大模型应用的**最底层能力**。无论是 RAG、Ag
 
 一个完整的 Prompt 可以拆解为四个正交维度：
 
-```
-┌───────────────────────────────────────────────────┐
-│                Prompt Structure                    │
-│                                                   │
-│  ┌───────────┐  ┌───────────┐  ┌───────────┐    │
-│  │Instruction│  │  Context  │  │  Examples  │    │
-│  │ What to do│  │ Background│  │ How to do  │    │
-│  └───────────┘  └───────────┘  └───────────┘    │
-│                                                   │
-│  ┌──────────────────────────────────────────┐    │
-│  │           Constraints                     │    │
-│  │  Format / Length / Role / Restrictions     │    │
-│  └──────────────────────────────────────────┘    │
-└───────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph PS["Prompt Structure"]
+        I["Instruction<br/>What to do"]
+        C["Context<br/>Background"]
+        E["Examples<br/>How to do"]
+        CN["Constraints<br/>Format / Length / Role / Restrictions"]
+    end
 ```
 
 | 要素 | 作用 | 示例 |
@@ -702,16 +698,14 @@ DSPy 将 Prompt Engineering 从"手工文本调参"提升为"可编程、可优�
 
 ### 核心概念
 
-```
-┌────────────────────────────────────────────┐
-│                  DSPy                      │
-│                                            │
-│  Signature  →  Define input/output fields  │
-│  Module     →  Composable prompt units     │
-│  Optimizer  →  Auto-optimize prompts       │
-│                                            │
-│  "The PyTorch of Prompt Engineering"       │
-└────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph DSPy["DSPy"]
+        S["Signature"] --> SD["Define input/output fields"]
+        M["Module"] --> MD["Composable prompt units"]
+        O["Optimizer"] --> OD["Auto-optimize prompts"]
+        Slogan>"&quot;The PyTorch of Prompt Engineering&quot;"]
+    end
 ```
 
 ### 代码示例

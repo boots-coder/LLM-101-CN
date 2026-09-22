@@ -10,12 +10,14 @@ prereqs: [engineering/inference, engineering/distributed]
 
 ## 在大模型体系中的位置
 
-```
-Engineering
-  ├── Inference Optimization  → 你知道有哪些优化技术
-  ├── Distributed Training    → 你知道怎么并行
-  ├── Profiling               ◄── 你在这里：你知道怎么找到瓶颈
-  └── Quantization            → 你知道怎么压缩
+```mermaid
+flowchart LR
+    E(["Engineering"])
+    E --> A["Inference Optimization"] --> A1["你知道有哪些优化技术"]
+    E --> B["Distributed Training"] --> B1["你知道怎么并行"]
+    E --> C["Profiling"] --> C1["你知道怎么找到瓶颈"]
+    E --> D["Quantization"] --> D1["你知道怎么压缩"]
+    HERE>"★ 你在这里"] -.- C
 ```
 
 推理优化和分布式训练告诉你"有哪些技术"，但 profiling 告诉你"该用哪个"。不做性能分析就上优化技术，相当于闭眼开车。

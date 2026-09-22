@@ -57,18 +57,14 @@ DCLM 还顺手给整个数据社区贡献了一个 benchmark 范式：
 
 DCLM 把数据资产分成三档，理解这三个池子的关系是看懂全局的关键：
 
-```
-CommonCrawl WARC（PB 级）
-        │ resiliparse 抽文本
-        ▼
-DCLM-Pool（240T token，未过滤）  ◀── 比赛的 raw input pool
-        │ RefinedWeb pipeline
-        │ （URL 黑名单 + 语言过滤 + 启发式 + BFF 去重）
-        ▼
-DCLM-RefinedWeb（约 100T token）  ◀── "已经做完 heuristic 但还没用 fastText"
-        │ fastText OH2.5+ELI5 分类器（top 10% prob）
-        ▼
-DCLM-Baseline（约 4T token）     ◀── 论文的最强 baseline
+```mermaid
+flowchart TD
+    A[("CommonCrawl WARC（PB 级）")] -->|"resiliparse 抽文本"| B["DCLM-Pool（240T token，未过滤）"]
+    B -->|"RefinedWeb pipeline<br/>（URL 黑名单 + 语言过滤 + 启发式 + BFF 去重）"| C["DCLM-RefinedWeb（约 100T token）"]
+    C -->|"fastText OH2.5+ELI5 分类器（top 10% prob）"| E["DCLM-Baseline（约 4T token）"]
+    N1>"比赛的 raw input pool"] -.- B
+    N2>"已经做完 heuristic 但还没用 fastText"] -.- C
+    N3>"论文的最强 baseline"] -.- E
 ```
 
 注意两点：
@@ -82,18 +78,12 @@ DCLM-Baseline（约 4T token）     ◀── 论文的最强 baseline
 
 DCLM 团队在论文 §4 / §A 里讨论过分类器选择，本质是 **inference cost vs quality 的 Pareto 选择**。在动手实验之前，先快速回忆一下 fastText 的内部结构——它和"深度学习"几乎没关系：
 
-```
-输入文本 "deep learning tutorial"
-   │ ① 切词 + char n-gram（"dee","eep","ep ", ...）
-   │ ② 每个 token / n-gram 哈希到 [0, bucket_size) 的桶
-   │   bucket_size 默认 2M，hash 冲突被有意接受（增加泛化）
-   ▼
-查表：每个 bucket id → dim 维向量
-   │ ③ 所有向量做 mean pooling，得到一条 dim 维 doc 表征
-   ▼
-线性层 W ∈ R^{dim × num_labels} → softmax
-   ▼
-P(__label__hq | text) = 0.834
+```mermaid
+flowchart TD
+    A(["输入文本 &quot;deep learning tutorial&quot;"])
+    A -->|"① 切词 + char n-gram（&quot;dee&quot;,&quot;eep&quot;,&quot;ep &quot;, ...）<br/>② 每个 token / n-gram 哈希到 [0, bucket_size) 的桶<br/>bucket_size 默认 2M，hash 冲突被有意接受（增加泛化）"| B[("查表：每个 bucket id → dim 维向量")]
+    B -->|"③ 所有向量做 mean pooling，得到一条 dim 维 doc 表征"| C["线性层 W ∈ R^&#123;dim × num_labels&#125; → softmax"]
+    C --> E(["P(__label__hq &#124; text) = 0.834"])
 ```
 
 整个网络**没有非线性激活、没有 attention、没有 RNN**，纯加和 + 一次矩阵乘。这就是为什么它能 CPU 单核 30s/GB——所有 cost 都花在 hash 和向量加法上。这也是为什么它能在 200k 样本上 5 分钟跑完一个 epoch。
@@ -174,15 +164,15 @@ DCLM 论文 §4 / Table 6–7 报告了几组重要对比，整理如下（数�
 
 看 `dclm_baseline_refinedweb.yaml` 和 README §2 的描述，DCLM-Baseline 的实际顺序是：
 
-```
-DCLM-Pool
-  │ ① 文本抽取（resiliparse）
-  │ ② RefinedWeb-style heuristic（URL 黑名单、长度、符号比、重复 n-gram、massive_web_repetition_filters 等）
-  │ ③ BFF（Bloom Filter Fuzzy）模糊去重 ←── Rust 实现，单机
-  │ ④ fastText OH2.5+ELI5 质量分类 + threshold 过滤
-  │ ⑤ tokenize-shuffle
-  ▼
-DCLM-Baseline
+```mermaid
+flowchart TD
+    A(["DCLM-Pool"]) --> S1["① 文本抽取（resiliparse）"]
+    S1 --> S2["② RefinedWeb-style heuristic<br/>（URL 黑名单、长度、符号比、重复 n-gram、massive_web_repetition_filters 等）"]
+    S2 --> S3["③ BFF（Bloom Filter Fuzzy）模糊去重"]
+    S3 --> S4["④ fastText OH2.5+ELI5 质量分类 + threshold 过滤"]
+    S4 --> S5["⑤ tokenize-shuffle"]
+    S5 --> B(["DCLM-Baseline"])
+    N1>"Rust 实现，单机"] -.- S3
 ```
 
 **fastText 在去重之后**。这个顺序是经过对比实验选定的：先去重再过滤，能避免分类器把同一篇 viral spam 反复打高分（或反复打低分）影响阈值分布。BFF 用的是 Rust 实现，在 [`dedup/bff`](https://github.com/mlfoundations/dclm/tree/main/dedup/bff) 目录，与 Python ray pipeline 解耦，因为 BFF 本质需要全局视野（Bloom 集合），不适合 per-shard 并行。

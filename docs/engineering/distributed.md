@@ -13,18 +13,13 @@ prereqs: [training/pretraining]
 
 ## 在大模型体系中的位置
 
-```
-┌────────────────────────────────────────────────────────────────────┐
-│                    LLM Engineering Overview                        │
-│                                                                    │
-│  Data Prep → Model Design → [Distributed Training] → Inference → Eval │
-│                                      ↑                             │
-│                                 You are here                       │
-│                                                                    │
-│  Distributed training bridges "designing a model" and              │
-│  "actually training it". Models >10B params cannot be              │
-│  trained in reasonable time without distributed training.          │
-└────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph OV["LLM Engineering Overview"]
+        A(["Data Prep"]) --> B["Model Design"] --> C["[Distributed Training]"] --> D["Inference"] --> E(["Eval"])
+        HERE>"★ You are here"] -.- C
+    end
+    NOTE>"Distributed training bridges #quot;designing a model#quot; and<br/>#quot;actually training it#quot;. Models >10B params cannot be<br/>trained in reasonable time without distributed training."] -.- OV
 ```
 
 分布式训练不仅仅是"把模型放到多张卡上"这么简单。它涉及到：
@@ -122,30 +117,21 @@ $$
 4. 对所有 GPU 的梯度做 **AllReduce**（求平均）
 5. 每张 GPU 用相同的平均梯度更新参数
 
-```
-         ┌──────────────┐
-         │ Large Batch  │
-         │ (Global BS)  │
-         └──────┬───────┘
-                │ Split
-    ┌───────────┼───────────┐
-    ▼           ▼           ▼
-┌────────┐ ┌────────┐ ┌────────┐
-│ GPU 0  │ │ GPU 1  │ │ GPU 2  │
-│  Full  │ │  Full  │ │  Full  │
-│ Model  │ │ Model  │ │ Model  │
-│batch 0 │ │batch 1 │ │batch 2 │
-└──┬─────┘ └──┬─────┘ └──┬─────┘
-   │ grad_0   │ grad_1   │ grad_2
-   └──────────┼──────────┘
-              │ AllReduce (average)
-   ┌──────────┼──────────┐
-   ▼          ▼          ▼
- avg_grad   avg_grad   avg_grad
-   │          │          │
-   ▼          ▼          ▼
- Update     Update     Update
- Params     Params     Params
+```mermaid
+flowchart TD
+    LB(["Large Batch<br/>(Global BS)"])
+    LB -->|"Split"| G0["GPU 0<br/>Full Model<br/>batch 0"]
+    LB -->|"Split"| G1["GPU 1<br/>Full Model<br/>batch 1"]
+    LB -->|"Split"| G2["GPU 2<br/>Full Model<br/>batch 2"]
+    G0 -->|"grad_0"| AR["AllReduce (average)"]
+    G1 -->|"grad_1"| AR
+    G2 -->|"grad_2"| AR
+    AR --> A0["avg_grad"]
+    AR --> A1["avg_grad"]
+    AR --> A2["avg_grad"]
+    A0 --> U0["Update Params"]
+    A1 --> U1["Update Params"]
+    A2 --> U2["Update Params"]
 ```
 
 **数学等价性**：数据并行在数学上等价于使用更大 batch size 的单卡训练。假设全局 batch size 为 $B$，使用 $N$ 张卡，每张卡的 mini-batch 为 $B/N$：
@@ -191,13 +177,26 @@ for epoch in range(num_epochs):
 
 DDP 并不是等所有梯度计算完再做一次 AllReduce，而是将梯度分成多个 **bucket**，当一个 bucket 的梯度计算完毕就立即开始通信，实现**计算和通信的重叠**：
 
-```
-反向传播时间线：
-Layer N  →  Layer N-1  →  ...  →  Layer 1  →  Layer 0
-  │           │                     │           │
-  └─Bucket 3──┘        └──Bucket 2──┘   └─Bucket 1──┘  └─Bucket 0
-      ↓ 立即开始                ↓ 立即开始        ↓
-    AllReduce              AllReduce         AllReduce
+```mermaid
+flowchart LR
+    subgraph B3["Bucket 3"]
+        LN["Layer N"]
+        LN1["Layer N-1"]
+    end
+    subgraph B2["Bucket 2"]
+        DOTS["..."]
+    end
+    subgraph B1["Bucket 1"]
+        L1["Layer 1"]
+    end
+    subgraph B0["Bucket 0"]
+        L0["Layer 0"]
+    end
+    LN --> LN1 --> DOTS --> L1 --> L0
+    B3 -->|"立即开始"| AR3["AllReduce"]
+    B2 -->|"立即开始"| AR2["AllReduce"]
+    B1 --> AR1["AllReduce"]
+    T>"反向传播时间线"] -.- LN
 ```
 
 这样通信时间被隐藏在计算时间之下，大幅减少了端到端的训练时间。
@@ -467,14 +466,17 @@ Megatron-LM 定义了两个关键的通信算子：
 - **$f$ 算子**：前向传播中是恒等操作（identity），反向传播中执行 AllReduce
 - **$g$ 算子**：前向传播中执行 AllReduce，反向传播中是恒等操作
 
-```
-列并行线性层：              行并行线性层：
-  X ──f──> X (identity)     X_i ──计算──> Y_i ──g──> Y (AllReduce)
-  │                                              │
-  ▼                                              ▼
-  X @ W_i = Y_i             反向传播时 g 是 identity
-  │
-  ▼ (反向传播时 f 做 AllReduce)
+```mermaid
+flowchart TD
+    subgraph COL["列并行线性层"]
+        CX["X"] -->|"f"| CX2["X (identity)"]
+        CX2 --> CY["X @ W_i = Y_i"]
+        CY --> CB>"反向传播时 f 做 AllReduce"]
+    end
+    subgraph ROW["行并行线性层"]
+        RX["X_i"] -->|"计算"| RY["Y_i"] -->|"g"| RO["Y (AllReduce)"]
+        RO --> RB>"反向传播时 g 是 identity"]
+    end
 ```
 
 ### Self-Attention 的张量并行
@@ -487,24 +489,25 @@ $$
 
 假设有 $h$ 个头，使用 $N$ 张 GPU（$N$ 整除 $h$）：
 
-```
-          输入 X
-            │
-    ┌───────┼───────┐
-    ▼       ▼       ▼
-  GPU 0   GPU 1   GPU 2     ← 每张 GPU 负责 h/N 个头
-  Q_0     Q_1     Q_2       ← Q = XW_Q, W_Q 按列拆分 (每张卡 h/N 列)
-  K_0     K_1     K_2       ← K = XW_K, W_K 按列拆分
-  V_0     V_1     V_2       ← V = XW_V, W_V 按列拆分
-    │       │       │
-  Attn_0  Attn_1  Attn_2    ← 各自独立计算 attention
-    │       │       │
-  O_0     O_1     O_2       ← 各自的输出
-    │       │       │
-    └───────┼───────┘
-            │ AllReduce (通过行并行的输出投影 W_O)
-            ▼
-         最终输出
+```mermaid
+flowchart TD
+    X(["输入 X"])
+    X --> QKV0["GPU 0<br/>Q_0 / K_0 / V_0"]
+    X --> QKV1["GPU 1<br/>Q_1 / K_1 / V_1"]
+    X --> QKV2["GPU 2<br/>Q_2 / K_2 / V_2"]
+    N1>"每张 GPU 负责 h/N 个头<br/>Q = XW_Q, W_Q 按列拆分 (每张卡 h/N 列)<br/>K = XW_K, W_K 按列拆分<br/>V = XW_V, W_V 按列拆分"] -.- QKV0
+    QKV0 --> A0["Attn_0"]
+    QKV1 --> A1["Attn_1"]
+    QKV2 --> A2["Attn_2"]
+    N2>"各自独立计算 attention"] -.- A0
+    A0 --> O0["O_0"]
+    A1 --> O1["O_1"]
+    A2 --> O2["O_2"]
+    N3>"各自的输出"] -.- O0
+    O0 --> AR["AllReduce (通过行并行的输出投影 W_O)"]
+    O1 --> AR
+    O2 --> AR
+    AR --> OUT(["最终输出"])
 ```
 
 $W_Q, W_K, W_V$ 使用**列并行**（按头拆分），$W_O$（输出投影）使用**行并行**。这样一个 Attention 层只需要一次 AllReduce。
@@ -526,22 +529,20 @@ $$
 1. **$A$ 用列并行**：$A = [A_1 | A_2]$，每张 GPU 计算 $\text{GeLU}(xA_i)$，因为 GeLU 是逐元素操作，可以在拆分后的结果上直接做
 2. **$B$ 用行并行**：$B = \begin{bmatrix} B_1 \\ B_2 \end{bmatrix}$，每张 GPU 的输入恰好是列并行的输出（已经按列拆分），最后 AllReduce 求和
 
-```
-    x ──(f: identity)──> x
-    │                    │
-    ▼                    ▼
-  GPU 0: x @ A_1       GPU 1: x @ A_2       ← 列并行
-    │                    │
-    ▼                    ▼
-  GeLU(xA_1)           GeLU(xA_2)           ← 各自独立做 GeLU
-    │                    │
-    ▼                    ▼
-  GeLU(xA_1) @ B_1     GeLU(xA_2) @ B_2    ← 行并行
-    │                    │
-    └────────┬───────────┘
-             │ AllReduce (g)
-             ▼
-           输出 = GeLU(xA_1)B_1 + GeLU(xA_2)B_2 = GeLU(xA)B
+```mermaid
+flowchart TD
+    X(["x"])
+    X -->|"f: identity"| M0["GPU 0: x @ A_1"]
+    X -->|"f: identity"| M1["GPU 1: x @ A_2"]
+    N1>"列并行"] -.- M0
+    M0 --> G0["GeLU(xA_1)"]
+    M1 --> G1["GeLU(xA_2)"]
+    N2>"各自独立做 GeLU"] -.- G0
+    G0 --> B0["GeLU(xA_1) @ B_1"]
+    G1 --> B1["GeLU(xA_2) @ B_2"]
+    N3>"行并行"] -.- B0
+    B0 -->|"AllReduce (g)"| OUT(["输出 = GeLU(xA_1)B_1 + GeLU(xA_2)B_2 = GeLU(xA)B"])
+    B1 -->|"AllReduce (g)"| OUT
 ```
 
 **关键优势**：列并行 + 行并行的组合，使得 MLP 层只需要**一次前向 AllReduce + 一次反向 AllReduce**。
@@ -770,28 +771,26 @@ $$
 
 实际训练超大模型时，需要同时使用三种并行：
 
-```
-┌───────────────────────────────────────────────────────────┐
-│                      3D Parallelism                       │
-│                                                           │
-│  Data Parallel (DP=8): 8 full model replicas              │
-│  +-- Pipeline Parallel (PP=4): each split into 4 stages   │
-│  |   +-- Tensor Parallel (TP=2): 2 GPUs per stage        │
-│  |   |   +-- GPU 0                                       │
-│  |   |   +-- GPU 1                                       │
-│  |   +-- Tensor Parallel (TP=2)                          │
-│  |   |   +-- GPU 2                                       │
-│  |   |   +-- GPU 3                                       │
-│  |   +-- Tensor Parallel (TP=2)                          │
-│  |   |   +-- GPU 4                                       │
-│  |   |   +-- GPU 5                                       │
-│  |   +-- Tensor Parallel (TP=2)                          │
-│  |       +-- GPU 6                                       │
-│  |       +-- GPU 7                                       │
-│  +-- ... (7 more identical PP groups)                     │
-│                                                           │
-│  Total GPUs = DP x PP x TP = 8 x 4 x 2 = 64             │
-└───────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph P3D["3D Parallelism"]
+        DP["Data Parallel (DP=8): 8 full model replicas"]
+        DP --> PP["Pipeline Parallel (PP=4): each split into 4 stages"]
+        DP --> MORE["... (7 more identical PP groups)"]
+        PP --> TP1["Tensor Parallel (TP=2): 2 GPUs per stage"]
+        PP --> TP2["Tensor Parallel (TP=2)"]
+        PP --> TP3["Tensor Parallel (TP=2)"]
+        PP --> TP4["Tensor Parallel (TP=2)"]
+        TP1 --> G0["GPU 0"]
+        TP1 --> G1["GPU 1"]
+        TP2 --> G2["GPU 2"]
+        TP2 --> G3["GPU 3"]
+        TP3 --> G4["GPU 4"]
+        TP3 --> G5["GPU 5"]
+        TP4 --> G6["GPU 6"]
+        TP4 --> G7["GPU 7"]
+    end
+    TOTAL>"Total GPUs = DP x PP x TP = 8 x 4 x 2 = 64"] -.- P3D
 ```
 
 **Llama 70B 在 64 卡上的实际配置示例**：
@@ -814,17 +813,18 @@ $$
 
 ### 通信拓扑设计原则
 
-```
-┌─────────────── 节点 0 ────────────────┐   ┌─── 节点 1 ───┐
-│ GPU0 ←NVLink→ GPU1 ←NVLink→ ... GPU7  │ ← IB/RoCE → │ GPU0 ...    │
-│ ├───── TP（张量并行）组 ──────┤         │              │             │
-│         高带宽、低延迟                  │              │             │
-└────────────────────────────────────────┘   └─────────────┘
-                    │                                │
-                    └──────── PP（流水线并行）──────────┘
-                              通信量小，可跨节点
-
-          DP（数据并行）/ ZeRO：全局范围
+```mermaid
+flowchart LR
+    subgraph N0["节点 0"]
+        G00["GPU0"] <-->|"NVLink"| G01["GPU1"] <-->|"NVLink"| G07["... GPU7"]
+        TPG>"TP（张量并行）组<br/>高带宽、低延迟"] -.- G01
+    end
+    subgraph N1["节点 1"]
+        G10["GPU0 ..."]
+    end
+    N0 <-->|"IB/RoCE"| N1
+    N0 -->|"PP（流水线并行）<br/>通信量小，可跨节点"| N1
+    DPN>"DP（数据并行）/ ZeRO：全局范围"] -.- N0
 ```
 
 **黄金法则**：
@@ -853,21 +853,29 @@ Ring Attention 是 Context Parallelism 最主流的实现方式，核心思想�
 4. 每一步，各 GPU 用本地 Q 与当前收到的 KV 块计算部分注意力
 5. 利用 Online Softmax 在线合并各步结果
 
-```
-Ring Attention 执行流程（4 GPU，序列分 4 段）：
-
-Step 0:                         Step 1:
-GPU 0: Q0 × K0,V0  ─K0,V0→     GPU 0: Q0 × K3,V3  ─K3,V3→
-GPU 1: Q1 × K1,V1  ─K1,V1→     GPU 1: Q1 × K0,V0  ─K0,V0→
-GPU 2: Q2 × K2,V2  ─K2,V2→     GPU 2: Q2 × K1,V1  ─K1,V1→
-GPU 3: Q3 × K3,V3  ─K3,V3→     GPU 3: Q3 × K2,V2  ─K2,V2→
-       ↑___________环形传递_↓           ↑___________环形传递_↓
-
-Step 2:                         Step 3:
-GPU 0: Q0 × K2,V2              GPU 0: Q0 × K1,V1
-...（继续环形传递）              ...（所有 KV 块都被每个 GPU 看到一次）
-
-每步完成后用 Online Softmax 合并: O_new = rescale(O_old) + P_block @ V_block
+```mermaid
+flowchart TD
+    TITLE>"Ring Attention 执行流程（4 GPU，序列分 4 段）"] -.- S0
+    subgraph S0["Step 0"]
+        A0["GPU 0: Q0 × K0,V0"] -->|"K0,V0"| A1["GPU 1: Q1 × K1,V1"]
+        A1 -->|"K1,V1"| A2["GPU 2: Q2 × K2,V2"]
+        A2 -->|"K2,V2"| A3["GPU 3: Q3 × K3,V3"]
+        A3 -->|"K3,V3（环形传递）"| A0
+    end
+    subgraph S1["Step 1"]
+        B0["GPU 0: Q0 × K3,V3"] -->|"K3,V3"| B1["GPU 1: Q1 × K0,V0"]
+        B1 -->|"K0,V0"| B2["GPU 2: Q2 × K1,V1"]
+        B2 -->|"K1,V1"| B3["GPU 3: Q3 × K2,V2"]
+        B3 -->|"K2,V2（环形传递）"| B0
+    end
+    subgraph S2["Step 2"]
+        C0["GPU 0: Q0 × K2,V2"] --- C1["...（继续环形传递）"]
+    end
+    subgraph S3["Step 3"]
+        D0["GPU 0: Q0 × K1,V1"] --- D1["...（所有 KV 块都被每个 GPU 看到一次）"]
+    end
+    S0 --> S1 --> S2 --> S3
+    MERGE>"每步完成后用 Online Softmax 合并:<br/>O_new = rescale(O_old) + P_block @ V_block"] -.- S3
 ```
 
 #### 通信与计算重叠
@@ -937,27 +945,28 @@ MoE 的前向传播中，Router 为每个 token 选择 top-k 个专家。这意�
 - 不同 token 被路由到不同 GPU 上的不同专家
 - 需要**All-to-All 通信**：每个 GPU 将 token 发送到其被路由的专家所在的 GPU
 
-```
-Expert Parallelism 通信模式（4 GPU，8 个专家，每 GPU 2 个专家）：
+```mermaid
+flowchart TD
+    TITLE>"Expert Parallelism 通信模式<br/>（4 GPU，8 个专家，每 GPU 2 个专家）"] -.- ROUTER
 
-Router 输出:
-  Token A → Expert 0 (GPU 0), Expert 5 (GPU 2)
-  Token B → Expert 3 (GPU 1), Expert 7 (GPU 3)
-  Token C → Expert 1 (GPU 0), Expert 4 (GPU 2)
+    subgraph ROUTER["Router 输出"]
+        TA["Token A → Expert 0 (GPU 0), Expert 5 (GPU 2)"]
+        TB["Token B → Expert 3 (GPU 1), Expert 7 (GPU 3)"]
+        TC["Token C → Expert 1 (GPU 0), Expert 4 (GPU 2)"]
+    end
 
-All-to-All 通信（dispatch）:
-  GPU 0 → GPU 0: Token A, Token C（去 Expert 0, 1）
-  GPU 0 → GPU 1: Token B（去 Expert 3）
-  GPU 0 → GPU 2: Token A, Token C（去 Expert 5, 4）
-  GPU 0 → GPU 3: Token B（去 Expert 7）
+    ROUTER --> SRC["GPU 0（token 来源）"]
+    SRC -->|"Token A, Token C（去 Expert 0, 1）"| E0["GPU 0: Expert 0(Token A), Expert 1(Token C)"]
+    SRC -->|"Token B（去 Expert 3）"| E1["GPU 1: Expert 2(-), Expert 3(Token B)"]
+    SRC -->|"Token A, Token C（去 Expert 5, 4）"| E2["GPU 2: Expert 4(Token C), Expert 5(Token A)"]
+    SRC -->|"Token B（去 Expert 7）"| E3["GPU 3: Expert 6(-), Expert 7(Token B)"]
+    DISP>"All-to-All 通信（dispatch）"] -.- SRC
+    CALC>"各 GPU 计算本地专家"] -.- E0
 
-各 GPU 计算本地专家:
-  GPU 0: Expert 0(Token A), Expert 1(Token C)
-  GPU 1: Expert 2(-), Expert 3(Token B)
-  GPU 2: Expert 4(Token C), Expert 5(Token A)
-  GPU 3: Expert 6(-), Expert 7(Token B)
-
-All-to-All 通信（combine）: 将结果发回各 token 的来源 GPU
+    E0 --> CB["All-to-All 通信（combine）<br/>将结果发回各 token 的来源 GPU"]
+    E1 --> CB
+    E2 --> CB
+    E3 --> CB
 ```
 
 #### All-to-All 通信模式
@@ -1066,14 +1075,19 @@ python pretrain_gpt.py \
 
 **通信拓扑最佳实践**：
 
-```
-单节点（8 GPU，NVLink 互连）:
-  ├── TP=4: GPU 0-3 为一组，GPU 4-7 为一组
-  └── CP=2: 每个 TP 组内再分 2 个 CP 组
-
-跨节点:
-  ├── PP=4: 4 个节点串成流水线
-  └── DP=N: 所有流水线副本做数据并行
+```mermaid
+flowchart TD
+    subgraph INTRA["单节点（8 GPU，NVLink 互连）"]
+        TP["TP=4: GPU 0-3 为一组，GPU 4-7 为一组"]
+        CP["CP=2: 每个 TP 组内再分 2 个 CP 组"]
+        TP --> CP
+    end
+    subgraph INTER["跨节点"]
+        PP["PP=4: 4 个节点串成流水线"]
+        DP["DP=N: 所有流水线副本做数据并行"]
+        PP --> DP
+    end
+    INTRA --> INTER
 ```
 
 #### DeepSeek-V3 的训练并行策略

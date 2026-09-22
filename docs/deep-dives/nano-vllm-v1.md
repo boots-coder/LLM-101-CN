@@ -17,14 +17,12 @@ prereqs: [engineering/inference, deep-dives/nano-vllm]
 
 LLM 推理引擎的演进并非线性的，而是沿着两条互补的路线同时发展：
 
-```
-V0 (Continuous Batching + PagedAttention)
- │
- ├──> V1 (Chunked Prefill + 异步调度 + 统一 Kernel)
- │         └── PD 融合路线：同一 GPU 上交错处理 Prefill 和 Decode
- │
- └──> PD Disaggregation
-           └── PD 分离路线：不同 GPU 群组分别处理 Prefill 和 Decode
+```mermaid
+flowchart TD
+    V0(["V0 (Continuous Batching + PagedAttention)"]) --> V1["V1 (Chunked Prefill + 异步调度 + 统一 Kernel)"]
+    V0 --> PD["PD Disaggregation"]
+    V1 --> N1>"PD 融合路线：同一 GPU 上交错处理 Prefill 和 Decode"]
+    PD --> N2>"PD 分离路线：不同 GPU 群组分别处理 Prefill 和 Decode"]
 ```
 
 **两条路线并不矛盾**——生产级系统通常同时使用：Prefill 节点内部用 Chunked Prefill，而 Prefill/Decode 节点之间做分离。
@@ -505,53 +503,27 @@ Chunked Prefill 虽然巧妙地融合了 P/D 计算，但在超大规模部署�
 
 **PD 分离的核心动机**：让不同特性的计算任务运行在不同的硬件上，各自优化。
 
-```
-                    ┌─────────────────────┐
-  User Requests ──> │  Prefill Workers     │ ──KV Cache Transfer──>
-                    │  (Compute-optimized) │                       
-                    └─────────────────────┘                       
-                                                                   
-                    ┌─────────────────────┐
-                    │  Decode Workers      │ ──> Token Stream
-                    │  (Memory-optimized)  │
-                    └─────────────────────┘
+```mermaid
+flowchart LR
+    U(["User Requests"]) --> PW["Prefill Workers<br/>(Compute-optimized)"]
+    PW -->|"KV Cache Transfer"| DW["Decode Workers<br/>(Memory-optimized)"]
+    DW --> TS(["Token Stream"])
 ```
 
 ### 4.2 架构设计
 
 基于 Ray 实现的 PD 分离系统包含以下组件：
 
-```
-┌──────────────────────────────────────────────────────┐
-│                  RequestProducer (请求发送)              │
-│  - 模拟用户请求，异步投递到 Dispatcher                    │
-└───────────────────────┬──────────────────────────────┘
-                        │
-                        v
-┌──────────────────────────────────────────────────────┐
-│           DistributedDispatcher (Ray Actor)             │
-│  - prefill_queue: 等待 Prefill 的请求                    │
-│  - decode_set: 正在 Decode 的请求                        │
-│  - 提供 drain_prefill / collect_decode 接口              │
-└─────────────┬─────────────────────┬──────────────────┘
-              │                     │
-              v                     v
-┌─────────────────────┐  ┌─────────────────────┐
-│  Prefill Executor    │  │  Decode Executor     │
-│  - 从 Dispatcher 取   │  │  - 从 Dispatcher 取   │
-│    prefill_queue     │  │    decode_set        │
-│  - 调用 PrefillWorker │  │  - 调用 DecodeWorker  │
-│  - KV 写入 Pool      │  │  - KV 增量写入 Pool    │
-└──────────┬──────────┘  └──────────┬──────────┘
-           │                        │
-           v                        v
-┌──────────────────────────────────────────────────────┐
-│              SharedKVPool (Ray Actor)                   │
-│  - 中心化 KV Cache 存储                                 │
-│  - store_prefill(): 批量写入 Prefill 结果                │
-│  - store_decode_step(): 单 token 增量写入                │
-│  - load_kv(): Decode 节点读取                           │
-└──────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    RP["RequestProducer (请求发送)<br/>- 模拟用户请求，异步投递到 Dispatcher"]
+    RP --> DD
+    DD["DistributedDispatcher (Ray Actor)<br/>- prefill_queue: 等待 Prefill 的请求<br/>- decode_set: 正在 Decode 的请求<br/>- 提供 drain_prefill / collect_decode 接口"]
+    DD --> PE["Prefill Executor<br/>- 从 Dispatcher 取 prefill_queue<br/>- 调用 PrefillWorker<br/>- KV 写入 Pool"]
+    DD --> DE["Decode Executor<br/>- 从 Dispatcher 取 decode_set<br/>- 调用 DecodeWorker<br/>- KV 增量写入 Pool"]
+    PE --> KV
+    DE --> KV
+    KV[("SharedKVPool (Ray Actor)<br/>- 中心化 KV Cache 存储<br/>- store_prefill(): 批量写入 Prefill 结果<br/>- store_decode_step(): 单 token 增量写入<br/>- load_kv(): Decode 节点读取")]
 ```
 
 ### 4.3 核心组件实现
@@ -916,11 +888,12 @@ Step 3: [Decode(0)] [Decode R_short] [Decode R_long]  ← 全 Decode
 
 ### 选型建议
 
-```
-单卡/少量 GPU + 低并发 → V0 足够
-中等并发 + 长短 prompt 混合 → V1 (Chunked Prefill)
-大规模部署 + 高并发 + 硬件异构 → PD 分离
-超大规模 → PD 分离 + 每个 P/D 节点内部用 Chunked Prefill
+```mermaid
+flowchart LR
+    C1{"单卡/少量 GPU + 低并发"} --> A1["V0 足够"]
+    C2{"中等并发 + 长短 prompt 混合"} --> A2["V1 (Chunked Prefill)"]
+    C3{"大规模部署 + 高并发 + 硬件异构"} --> A3["PD 分离"]
+    C4{"超大规模"} --> A4["PD 分离 + 每个 P/D 节点内部用 Chunked Prefill"]
 ```
 
 ---

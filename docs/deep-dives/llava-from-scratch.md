@@ -36,35 +36,19 @@ prereqs: [/applications/multimodal, /architecture/transformer, /architecture/gpt
 
 LLaVA 的整体结构比"transformer + 一堆训练 trick"要清爽得多。**三块串联**就完事了：
 
-```text
-        ┌─────────────────┐
-图片 ──▶│  视觉编码器     │  patch features  [B, N_v, D_v]
-        │  CLIP-ViT-B/32  │  D_v = 768
-        │  (冻结)         │
-        └────────┬────────┘
-                 │
-                 ▼
-        ┌─────────────────┐
-        │  MLP Projector  │  visual tokens   [B, N_v, D_l]
-        │  Linear→GELU→   │  D_l = 768 (GPT-2)
-        │  Linear         │
-        └────────┬────────┘
-                 │
-                 ▼   插入到 <image> 占位符所在的位置
-        ┌─────────────────────────────────────────┐
-        │  text embed: [BOS] What is in <image> ? │
-        │            ↓ 替换 <image> 为视觉 tokens │
-        │  full seq:  [BOS] What is in [v1..vN] ? │
-        └────────────────────┬────────────────────┘
-                             ▼
-        ┌─────────────────────────────────────────┐
-        │  LLM (GPT-2 small)                      │
-        │  阶段 1：冻结，只训 projector           │
-        │  阶段 2：解冻，与 projector 一起训      │
-        └────────────────────┬────────────────────┘
-                             ▼
-                       next-token loss
-                  (mask 掉 prompt 与视觉 token)
+```mermaid
+flowchart TD
+    IMG(["图片"]) --> VE["视觉编码器<br/>CLIP-ViT-B/32<br/>(冻结)"]
+    VE -->|"patch features [B, N_v, D_v]，D_v = 768"| PJ["MLP Projector<br/>Linear→GELU→Linear"]
+    PJ -->|"visual tokens [B, N_v, D_l]，D_l = 768 (GPT-2)"| SEQ
+    subgraph SEQ["插入到 &lt;image&gt; 占位符所在的位置"]
+        direction TB
+        T1["text embed: [BOS] What is in &lt;image&gt; ?"]
+        T2["full seq: [BOS] What is in [v1..vN] ?"]
+        T1 -->|"替换 &lt;image&gt; 为视觉 tokens"| T2
+    end
+    SEQ --> LLM["LLM (GPT-2 small)<br/>阶段 1：冻结，只训 projector<br/>阶段 2：解冻，与 projector 一起训"]
+    LLM --> LOSS(["next-token loss<br/>(mask 掉 prompt 与视觉 token)"])
 ```
 
 三个组件、两个阶段、一道关键拼接。下面逐步实现。

@@ -12,21 +12,18 @@ Ray 是一个通用的分布式计算框架，通过 **Task**（无状态远程�
 
 ## 在大模型体系中的位置
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                LLM Engineering Stack                         │
-│                                                              │
-│  Model Design → Distributed Training → Inference → Serving   │
-│                      ↑                     ↑                 │
-│                  Ray Train             Ray Serve              │
-│                      ↑                     ↑                 │
-│                ┌──────────────────────────────┐              │
-│                │   Ray Core (Actor / Task)    │  ← 你在这里   │
-│                └──────────────────────────────┘              │
-│                                                              │
-│  Ray 是底层调度引擎，vLLM、verl、DeepSpeed-Chat 等           │
-│  上层框架都依赖它进行分布式资源管理与任务编排                   │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph STACK["LLM Engineering Stack"]
+        MD["Model Design"] --> DT["Distributed Training"] --> INF["Inference"] --> SRV["Serving"]
+        RT["Ray Train"] --> DT
+        RS["Ray Serve"] --> INF
+        CORE[["Ray Core (Actor / Task)"]]
+        CORE --> RT
+        CORE --> RS
+    end
+    HERE>"★ 你在这里"] -.- CORE
+    NOTE>"Ray 是底层调度引擎，vLLM、verl、DeepSpeed-Chat 等<br/>上层框架都依赖它进行分布式资源管理与任务编排"] -.- STACK
 ```
 
 Ray 解决的核心问题：**如何把多台机器、多张 GPU 当做一个统一的计算资源池来使用？**
@@ -50,18 +47,15 @@ Ray 解决的核心问题：**如何把多台机器、多张 GPU 当做一个统
 
 ### 1.2 执行模型
 
-```
-Driver (你的主程序)
-  │
-  ├── ray.init()              # 连接/启动集群
-  │
-  ├── func.remote(args)       # 提交 Task → Worker 执行
-  │     └── 返回 ObjectRef    # 未来值的引用（Future）
-  │
-  ├── Actor.remote()          # 创建 Actor → 常驻 Worker
-  │     └── actor.method.remote()  # 调用 Actor 方法
-  │
-  └── ray.get(ref)            # 阻塞获取结果
+```mermaid
+flowchart TD
+    D(["Driver (你的主程序)"])
+    D --> I["ray.init()<br/>连接/启动集群"]
+    D --> T["func.remote(args)<br/>提交 Task → Worker 执行"]
+    T --> TR["返回 ObjectRef<br/>未来值的引用（Future）"]
+    D --> A["Actor.remote()<br/>创建 Actor → 常驻 Worker"]
+    A --> AM["actor.method.remote()<br/>调用 Actor 方法"]
+    D --> G["ray.get(ref)<br/>阻塞获取结果"]
 ```
 
 ::: tip 关键设计
@@ -445,18 +439,12 @@ ray.get([w.setup.remote() for w in workers])
 
 用 Ray 调度多 GPU 推理的核心设计：
 
-```
-                    ┌─────────────┐
-  请求 ──────────→  │  Ray Driver  │
-                    └──────┬──────┘
-                           │ 调度
-              ┌────────────┼────────────┐
-              ↓            ↓            ↓
-        ┌──────────┐ ┌──────────┐ ┌──────────┐
-        │ GPU 0    │ │ GPU 1    │ │ GPU 2    │
-        │ Model    │ │ Model    │ │ Model    │
-        │ Replica  │ │ Replica  │ │ Replica  │
-        └──────────┘ └──────────┘ └──────────┘
+```mermaid
+flowchart TD
+    REQ(["请求"]) --> DRV["Ray Driver"]
+    DRV -->|"调度"| G0["GPU 0<br/>Model Replica"]
+    DRV -->|"调度"| G1["GPU 1<br/>Model Replica"]
+    DRV -->|"调度"| G2["GPU 2<br/>Model Replica"]
 ```
 
 ### 4.2 用 Ray 实现 All-Reduce
@@ -480,18 +468,17 @@ mean_tensor = ray.get(reduce_mean.remote(refs))
 
 vLLM 使用 Ray 来实现多 GPU tensor parallel 推理：
 
-```
-vLLM Engine
-  │
-  ├── RayGPUExecutor
-  │     ├── 创建 N 个 Worker Actor（每个占 1 GPU）
-  │     ├── 初始化 NCCL 通信组
-  │     └── 调度 execute_model() 到所有 Worker
-  │
-  └── Worker Actor
-        ├── 持有模型的一个 TP shard
-        ├── 通过 NCCL 执行 tensor parallel 通信
-        └── 执行前向推理
+```mermaid
+flowchart TD
+    E(["vLLM Engine"])
+    E --> EX["RayGPUExecutor"]
+    E --> W["Worker Actor"]
+    EX --> EX1["创建 N 个 Worker Actor（每个占 1 GPU）"]
+    EX --> EX2["初始化 NCCL 通信组"]
+    EX --> EX3["调度 execute_model() 到所有 Worker"]
+    W --> W1["持有模型的一个 TP shard"]
+    W --> W2["通过 NCCL 执行 tensor parallel 通信"]
+    W --> W3["执行前向推理"]
 ```
 
 关键代码路径（vLLM 源码参考）：
@@ -519,29 +506,15 @@ RLHF 训练同时涉及**推理采样（rollout）**、**奖励打分（reward�
 
 ### 5.1 设计哲学：把分布式藏在装饰器里
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│   Driver / Single Controller (你的主程序)                      │
-│                                                                │
-│     for batch in dataloader:                                  │
-│         output = actor_rollout_wg.generate_sequences(batch)   │
-│         logp   = actor_rollout_wg.compute_log_prob(output)    │
-│         values = critic_wg.compute_values(output)             │
-│         rewards= rm_wg.compute_rm_score(output)               │
-│         actor_rollout_wg.update_actor(batch)                  │
-│                              ↑                                 │
-│   看起来是单机调用，背后 Dispatch 装饰器自动 split / gather    │
-└──────────────────────────────────────────────────────────────┘
-                              │
-   ┌──────────────────────────┼──────────────────────────┐
-   ↓                          ↓                          ↓
-┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│ WorkerGroup A│         │ WorkerGroup B│         │ WorkerGroup C│
-│ (Actor +     │         │ (Critic)     │         │ (Reward)     │
-│  Rollout +   │         │              │         │              │
-│  Reference)  │         │              │         │              │
-│  N×GPU       │         │  M×GPU       │         │  K×GPU       │
-└──────────────┘         └──────────────┘         └──────────────┘
+```mermaid
+flowchart TD
+    subgraph DRV["Driver / Single Controller (你的主程序)"]
+        CODE["for batch in dataloader:<br/>output = actor_rollout_wg.generate_sequences(batch)<br/>logp = actor_rollout_wg.compute_log_prob(output)<br/>values = critic_wg.compute_values(output)<br/>rewards = rm_wg.compute_rm_score(output)<br/>actor_rollout_wg.update_actor(batch)"]
+        TIP>"看起来是单机调用，背后 Dispatch 装饰器自动 split / gather"] -.- CODE
+    end
+    DRV --> WGA["WorkerGroup A<br/>(Actor + Rollout + Reference)<br/>N×GPU"]
+    DRV --> WGB["WorkerGroup B<br/>(Critic)<br/>M×GPU"]
+    DRV --> WGC["WorkerGroup C<br/>(Reward)<br/>K×GPU"]
 ```
 
 三个核心抽象（`verl/single_controller/ray/base.py`）：
@@ -733,18 +706,17 @@ PPO/GRPO 训练每走一步，actor 模型的权重就变了一次——而推�
 
 **架构概览**：
 
-```
-┌──────────────────┐       ┌──────────────────────────┐
-│  Actor Trainer   │       │  vLLM Rollout Engines     │
-│  (训练 Worker)    │       │  (RolloutRayActor × N)    │
-│                  │       │                            │
-│  每步训练后 ──→  │       │   接收新权重               │
-│  调用 broadcast  │ ════→ │   load_weights() 应用      │
-│  _to_vllm()      │       │                            │
-└──────────────────┘       └──────────────────────────┘
-        │                             │
-        └────── 通路 A：NCCL ─────────┘  (异机/异 GPU)
-        └────── 通路 B：CUDA IPC ─────┘  (同 GPU colocate)
+```mermaid
+flowchart LR
+    subgraph TR["Actor Trainer (训练 Worker)"]
+        T1["每步训练后<br/>调用 broadcast_to_vllm()"]
+    end
+    subgraph RO["vLLM Rollout Engines (RolloutRayActor × N)"]
+        R1["接收新权重<br/>load_weights() 应用"]
+    end
+    T1 --> R1
+    TR -->|"通路 A：NCCL (异机/异 GPU)"| RO
+    TR -->|"通路 B：CUDA IPC (同 GPU colocate)"| RO
 ```
 
 #### 通路 A：NCCL Broadcast（disaggregate 部署）

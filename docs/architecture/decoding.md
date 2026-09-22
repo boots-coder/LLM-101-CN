@@ -12,9 +12,14 @@ prereqs: [architecture/transformer]
 
 语言模型的前向传播输出的是下一个 Token 在整个词表上的概率分布（logits → softmax → 概率）。解码策略作用于这个概率分布之上，决定最终选哪个 Token。它不影响模型参数，却深刻影响生成质量——选择合适的解码策略是 LLM 应用落地的关键环节。
 
-```
-输入 Token 序列 → [Transformer 前向传播] → logits (词表大小的向量)
-    → [Temperature 缩放] → [Top-k / Top-p 过滤] → [采样或取 argmax] → 下一个 Token
+```mermaid
+flowchart LR
+    A(["输入 Token 序列"]) --> B["Transformer 前向传播"]
+    B --> C["logits (词表大小的向量)"]
+    C --> D["Temperature 缩放"]
+    D --> E1["Top-k / Top-p 过滤"]
+    E1 --> F["采样或取 argmax"]
+    F --> G(["下一个 Token"])
 ```
 
 ## 核心概念
