@@ -9,6 +9,7 @@ import MicroChoice from './components/MicroChoice.vue'
 import LcLesson from './components/LcLesson.vue'
 import PatternMap from './components/PatternMap.vue'
 import SrsReview from './components/SrsReview.vue'
+import HomeHero from './components/HomeHero.vue'
 
 const theme: Theme = {
   extends: DefaultTheme,
@@ -19,6 +20,7 @@ const theme: Theme = {
     app.component('LcLesson', LcLesson)
     app.component('PatternMap', PatternMap)
     app.component('SrsReview', SrsReview)
+    app.component('HomeHero', HomeHero)
   },
   Layout() {
     return h(DefaultTheme.Layout, null, {
